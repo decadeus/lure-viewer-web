@@ -75,6 +75,7 @@ function HomePage() {
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
   const [previewLure, setPreviewLure] = useState(null);
+  const [filterMode, setFilterMode] = useState("all"); // "all" | "mine"
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -84,14 +85,10 @@ function HomePage() {
       setLoading(true);
       setError("");
 
-      let query = supabase
+      const query = supabase
         .from("lures")
         .select("*")
         .order("created_at", { ascending: false });
-
-      if (user) {
-        query = query.eq("user_id", user.id);
-      }
 
       const { data, error } = await query;
 
@@ -123,6 +120,11 @@ function HomePage() {
       </div>
     );
   }
+
+  const visibleLures =
+    filterMode === "mine" && user
+      ? lures.filter((lure) => lure.user_id === user.id)
+      : lures;
 
   return (
     <div className="home-root">
@@ -169,6 +171,29 @@ function HomePage() {
       </header>
 
       <main className="home-body">
+        <aside className="home-sidebar">
+          <button
+            type="button"
+            className={`sidebar-filter-btn${
+              filterMode === "all" ? " sidebar-filter-btn--active" : ""
+            }`}
+            onClick={() => setFilterMode("all")}
+          >
+            Tous les leurres
+          </button>
+          {user && (
+            <button
+              type="button"
+              className={`sidebar-filter-btn${
+                filterMode === "mine" ? " sidebar-filter-btn--active" : ""
+              }`}
+              onClick={() => setFilterMode("mine")}
+            >
+              Mes leurres
+            </button>
+          )}
+        </aside>
+
         <section className="home-main">
           <div className="home-grid">
             {loading && (
@@ -179,16 +204,15 @@ function HomePage() {
                 {error}
               </p>
             )}
-            {!loading && !error && lures.length === 0 && (
+            {!loading && !error && visibleLures.length === 0 && (
               <p className="lure-list-message">
-                Aucun leurre pour l’instant. Clique sur “Créer un leurre” pour
-                commencer.
+                Aucun leurre à afficher pour ce filtre.
               </p>
             )}
 
             {!loading &&
               !error &&
-              lures.map((lure) => (
+              visibleLures.map((lure) => (
                 <button
                   key={lure.id}
                   type="button"
