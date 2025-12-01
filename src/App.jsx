@@ -411,10 +411,6 @@ function CreateLurePage() {
         <div className="sidebar-header">
           <div>
             <h1 className="app-title">Nouveau leurre</h1>
-            <p className="app-subtitle">
-              À droite, choisis le modèle et la couleur. À gauche, tu vois le
-              résultat.
-            </p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             {user ? (
@@ -478,11 +474,6 @@ function CreateLurePage() {
                 onChange={(e) => setColor(e.target.value)}
               />
             </div>
-            <p className="panel-helper">
-              La couleur choisie sera enregistrée comme couleur principale du
-              leurre pour ton compte.
-            </p>
-
             {error && (
               <p className="lure-list-message lure-list-message--error">
                 {error}
