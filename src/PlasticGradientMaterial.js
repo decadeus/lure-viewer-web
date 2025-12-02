@@ -19,21 +19,20 @@ const PlasticGradientMaterial = shaderMaterial(
     varying vec2 vUv;
     varying vec3 vNormal;
     varying vec3 vViewDir;
-    varying float vY;
+    varying vec3 vWorldNormal;
 
     void main() {
       vUv = uv;
 
-      // normales en espace vue
+      // normales en espace vue (pour l'éclairage)
       vNormal = normalize(normalMatrix * normal);
+
+      // normales en espace monde (pour le gradient haut/bas du leurre)
+      vWorldNormal = normalize(mat3(modelMatrix) * normal);
 
       // direction vers la caméra en espace vue
       vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
       vViewDir = normalize(-mvPosition.xyz);
-
-      // position verticale en espace monde
-      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-      vY = worldPosition.y;
 
       gl_Position = projectionMatrix * mvPosition;
     }
@@ -52,11 +51,13 @@ const PlasticGradientMaterial = shaderMaterial(
     varying vec2 vUv;
     varying vec3 vNormal;
     varying vec3 vViewDir;
-    varying float vY;
+    varying vec3 vWorldNormal;
 
     void main() {
-      // position verticale de base [0,1] à partir de la hauteur en monde
-      float h = clamp(vY * 0.5 + 0.5, 0.0, 1.0);
+      // 0 en haut (dos), 1 en bas (ventre), basé sur la normale monde
+      vec3 up = vec3(0.0, 1.0, 0.0);
+      float nDotUp = dot(normalize(vWorldNormal), up); // 1 = dessus, -1 = dessous
+      float h = clamp(0.5 * (1.0 - nDotUp), 0.0, 1.0); // 0 = haut, 1 = bas
 
       // contrôle de la position et de la douceur du dégradé
       float edge = clamp(gradientCenter, 0.0, 1.0);
