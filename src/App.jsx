@@ -8,6 +8,7 @@ import { supabase } from "./supabaseClient";
 import { useAuth } from "./AuthContext";
 import AuthPage from "./AuthPage.jsx";
 import { GradientMaterial } from "./GradientMaterial";
+import { PlasticGradientMaterial } from "./PlasticGradientMaterial";
 
 // ----------- Utilitaires modèle 3D -----------
 
@@ -77,7 +78,7 @@ function LureModel({
       scene.userData.normalized = true;
     }
 
-    // Forcer les yeux en noir si présents
+    // Forcer les yeux en noir et brillants si présents
     scene.traverse((child) => {
       if (
         child.isMesh &&
@@ -86,6 +87,17 @@ function LureModel({
         child.material.color
       ) {
         child.material.color.set("#000000");
+
+        const mat = child.material;
+        if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+          mat.roughness = 0.05;
+          mat.metalness = 0.9;
+          mat.envMapIntensity = 2.5;
+          if ("clearcoat" in mat) {
+            mat.clearcoat = 1.0;
+            mat.clearcoatRoughness = 0.05;
+          }
+        }
       }
     });
 
@@ -132,20 +144,35 @@ function LureModel({
           }
           let material = child.material;
 
-          // Si ce n'est pas déjà notre GradientMaterial, on le remplace
-          if (!(material instanceof GradientMaterial)) {
-            material = new GradientMaterial();
+          // Utiliser le matériau plastique avec gradient pour le corps (Cube)
+          if (!(material instanceof PlasticGradientMaterial)) {
+            material = new PlasticGradientMaterial();
             child.material = material;
           }
 
-          if (material.uniforms?.colorA && material.uniforms?.colorB) {
-            material.uniforms.colorA.value.copy(topColor);
-            material.uniforms.colorB.value.copy(bottomColor);
+          if (material.uniforms) {
+            if (material.uniforms.colorA) {
+              material.uniforms.colorA.value.copy(topColor);
+            }
+            if (material.uniforms.colorB) {
+              material.uniforms.colorB.value.copy(bottomColor);
+            }
+            // Degré de dégradé -> douceur du gradient (0 = coupure nette, 1 = très doux)
             if (material.uniforms.gradientSmoothness) {
               material.uniforms.gradientSmoothness.value = gradientSmoothness;
             }
+            // Position du dégradé -> centre de la transition haut/bas
             if (material.uniforms.gradientCenter) {
               material.uniforms.gradientCenter.value = gradientCenter;
+            }
+            if (material.uniforms.glossiness) {
+              material.uniforms.glossiness.value = 0.9;
+            }
+            if (material.uniforms.specularStrength) {
+              material.uniforms.specularStrength.value = 1.4;
+            }
+            if (material.uniforms.envStrength) {
+              material.uniforms.envStrength.value = 0.4;
             }
           }
         }
@@ -184,11 +211,36 @@ function LureModel({
           return;
         }
 
+        // Ne pas recolorer les yeux (ils restent noirs brillants)
+        if (child.name === "Oeil_Droit" || child.name === "Oeil_Gauche") {
+          return;
+        }
+
+        // Ne pas recolorer les yeux (ils restent noirs brillants)
         // Couleur de base du corps du leurre
         child.material.color.copy(targetColor);
 
-        // Pousser fortement vers un look très brillant pour le corps
-        const mat = child.material;
+        // S'assurer que le corps utilise un matériau PBR brillant
+        let mat = child.material;
+        if (
+          !(mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) &&
+          !mat.userData?.isConvertedToPhysical
+        ) {
+          const physical = new THREE.MeshPhysicalMaterial({
+            color: mat.color.clone(),
+            metalness: 0.85,
+            roughness: 0.03,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.02,
+            envMapIntensity: 3.0,
+          });
+          if (mat.map) physical.map = mat.map;
+          if (mat.normalMap) physical.normalMap = mat.normalMap;
+          physical.userData = { ...(mat.userData || {}), isConvertedToPhysical: true };
+          child.material = physical;
+          mat = physical;
+        }
+
         if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
           mat.roughness = 0.03; // quasi miroir
           mat.metalness = 0.85; // très métallique

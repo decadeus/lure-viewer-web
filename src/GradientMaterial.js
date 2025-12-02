@@ -51,15 +51,15 @@ const GradientMaterial = shaderMaterial(
       // Effet pseudo-métallique simple : bande brillante autour du centre
       float band = 1.0 - abs(h - edge) * 2.0; // [-1,1] autour du edge
       band = clamp(band, 0.0, 1.0);
-      float highlight = pow(band, 3.0); // plus large et plus intense
+      float highlight = pow(band, 2.5); // encore plus large
 
       // Ajout d'un "rim" très marqué pour simuler un reflet fort
-      float rim = pow(1.0 - band, 2.0);
+      float rim = pow(1.0 - band, 1.8);
 
       vec3 finalColor =
-        baseColor * (0.5 + 0.5 * highlight) +
-        vec3(0.35) * highlight +
-        vec3(0.12) * rim;
+        baseColor * (0.4 + 0.6 * highlight) +
+        vec3(0.45) * highlight +
+        vec3(0.18) * rim;
 
       gl_FragColor = vec4(finalColor, 1.0);
     }
