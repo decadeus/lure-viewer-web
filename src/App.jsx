@@ -7,6 +7,7 @@ import "./App.css";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./AuthContext";
 import AuthPage from "./AuthPage.jsx";
+import { GradientMaterial } from "./GradientMaterial";
 
 // ----------- Utilitaires modèle 3D -----------
 
@@ -24,12 +25,40 @@ function getModelPath(modelType) {
       return "/models/Lure5.glb";
     case "Lure7":
       return "/models/Lure7.glb";
+    case "Lure8":
+      return "/models/Lure8.glb";
+    case "Lure9":
+      return "/models/Lure9.glb";
+    case "Lure10":
+      return "/models/Lure10.glb";
+    case "Lure11":
+      return "/models/Lure11.glb";
+    case "Lure12":
+      return "/models/Lure12.glb";
+    case "Lure13":
+      return "/models/Lure13.glb";
+    case "Lure14":
+      return "/models/Lure14.glb";
+    case "Lure15":
+      return "/models/Lure15.glb";
+    case "Lure16":
+      return "/models/Lure16.glb";
     default:
       return "/models/Lure1.glb";
   }
 }
 
-function LureModel({ modelType, color }) {
+function LureModel({
+  modelType,
+  color,
+  useGradient = false,
+  gradientTop = "#ff5500",
+  gradientBottom = "#00ffaa",
+  gradientSmoothness = 1,
+  gradientCenter = 0.5,
+  gradientTargetName = null,
+  runnerType = null,
+}) {
   const modelPath = getModelPath(modelType);
   const { scene } = useGLTF(modelPath);
 
@@ -48,13 +77,141 @@ function LureModel({ modelType, color }) {
       scene.userData.normalized = true;
     }
 
+    // Forcer les yeux en noir si présents
+    scene.traverse((child) => {
+      if (
+        child.isMesh &&
+        (child.name === "Oeil_Droit" || child.name === "Oeil_Gauche") &&
+        child.material &&
+        child.material.color
+      ) {
+        child.material.color.set("#000000");
+      }
+    });
+
+    // Gestion des différents "runners" (Slallow / Medium / Deep)
+    const runnerNames = ["SlallowRunner", "MediumRunner", "DeepRunner"];
+    if (runnerType && runnerNames.includes(runnerType)) {
+      scene.traverse((child) => {
+        if (child.isMesh && runnerNames.includes(child.name)) {
+          // visibilité : un seul runner affiché à la fois
+          child.visible = child.name === runnerType;
+
+          if (child.material) {
+            // S'assurer que chaque bavette a SON propre matériau,
+            // pour ne pas partager la couleur avec le corps du leurre.
+            if (!child.material.userData?.isRunnerMaterial) {
+              const cloned = child.material.clone();
+              cloned.userData = { ...(cloned.userData || {}), isRunnerMaterial: true };
+              child.material = cloned;
+            }
+
+            // effet plastique blanc opaque (Option A)
+            child.material.transparent = false;
+            child.material.opacity = 1.0;
+            if ("roughness" in child.material) {
+              child.material.roughness = 0.2;
+            }
+            if ("metalness" in child.material) {
+              child.material.metalness = 0.05;
+            }
+          }
+        }
+      });
+    }
+
+    // Si on utilise le matériau dégradé, on remplace/paramètre les matériaux du modèle
+    if (useGradient) {
+      const topColor = new THREE.Color(gradientTop);
+      const bottomColor = new THREE.Color(gradientBottom);
+
+      scene.traverse((child) => {
+        if (child.isMesh) {
+          if (gradientTargetName && child.name !== gradientTargetName) {
+            return;
+          }
+          let material = child.material;
+
+          // Si ce n'est pas déjà notre GradientMaterial, on le remplace
+          if (!(material instanceof GradientMaterial)) {
+            material = new GradientMaterial();
+            child.material = material;
+          }
+
+          if (material.uniforms?.colorA && material.uniforms?.colorB) {
+            material.uniforms.colorA.value.copy(topColor);
+            material.uniforms.colorB.value.copy(bottomColor);
+            if (material.uniforms.gradientSmoothness) {
+              material.uniforms.gradientSmoothness.value = gradientSmoothness;
+            }
+            if (material.uniforms.gradientCenter) {
+              material.uniforms.gradientCenter.value = gradientCenter;
+            }
+          }
+        }
+      });
+      return;
+    }
+
+    // Pour certains modèles, on conserve les couleurs / matériaux d'origine
+    if (
+      modelType === "Lure8" ||
+      modelType === "Lure10" ||
+      modelType === "Lure11" ||
+      modelType === "Lure12" ||
+      modelType === "Lure13" ||
+      modelType === "Lure14" ||
+      modelType === "Lure15" ||
+      modelType === "Lure16"
+    ) {
+      return;
+    }
+
     const targetColor = new THREE.Color(color);
     scene.traverse((child) => {
       if (child.isMesh && child.material && child.material.color) {
+        // Bavettes / palettes: toujours plastique blanc opaque
+        if (runnerNames.includes(child.name)) {
+          child.material.color.set("#ffffff");
+          child.material.transparent = false;
+          child.material.opacity = 1.0;
+          const mat = child.material;
+          if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+            mat.roughness = 0.22;
+            mat.metalness = 0.05;
+            mat.envMapIntensity = 1.2;
+          }
+          return;
+        }
+
+        // Couleur de base du corps du leurre
         child.material.color.copy(targetColor);
+
+        // Pousser fortement vers un look très brillant pour le corps
+        const mat = child.material;
+        if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+          mat.roughness = 0.03; // quasi miroir
+          mat.metalness = 0.85; // très métallique
+          mat.envMapIntensity = 3.0;
+          if ("clearcoat" in mat) {
+            mat.clearcoat = 1.0;
+            mat.clearcoatRoughness = 0.02;
+          }
+        }
       }
     });
-  }, [scene, color]);
+  }, [
+    scene,
+    color,
+    modelType,
+    useGradient,
+    gradientTop,
+    gradientBottom,
+    gradientSmoothness,
+    gradientCenter,
+    gradientTargetName,
+    runnerType,
+  ]);
 
   return <primitive object={scene} />;
 }
@@ -65,6 +222,15 @@ useGLTF.preload("/models/Lure3.glb");
 useGLTF.preload("/models/Lure4.glb");
 useGLTF.preload("/models/Lure5.glb");
 useGLTF.preload("/models/Lure7.glb");
+useGLTF.preload("/models/Lure8.glb");
+useGLTF.preload("/models/Lure9.glb");
+useGLTF.preload("/models/Lure10.glb");
+useGLTF.preload("/models/Lure11.glb");
+useGLTF.preload("/models/Lure12.glb");
+useGLTF.preload("/models/Lure13.glb");
+useGLTF.preload("/models/Lure14.glb");
+useGLTF.preload("/models/Lure15.glb");
+useGLTF.preload("/models/Lure16.glb");
 
 // ----------- Page principale : liste de cartes de leurres -----------
 
@@ -287,9 +453,11 @@ function HomePage() {
                 className="modal-canvas"
                 camera={{ position: [0, 0.5, 2.5], fov: 50 }}
               >
-                <ambientLight intensity={0.7} />
-                <directionalLight position={[2, 5, 3]} intensity={1.4} />
-                <Environment preset="studio" />
+                <ambientLight intensity={0.35} />
+                <directionalLight position={[2, 5, 3]} intensity={1.6} />
+                <directionalLight position={[-2, -3, -2]} intensity={0.8} />
+                <pointLight position={[0, 2, 2]} intensity={0.7} />
+                <Environment preset="sunset" />
                 <LureModel
                   modelType={previewLure.model_type}
                   color={previewLure.color || "#ffffff"}
@@ -323,6 +491,11 @@ function CreateLurePage() {
   const navigate = useNavigate();
   const [modelType, setModelType] = useState("Lure1");
   const [color, setColor] = useState("#ff0000");
+  const [gradientTop, setGradientTop] = useState("#ff5500");
+  const [gradientBottom, setGradientBottom] = useState("#00ffaa");
+  const [gradientStrength, setGradientStrength] = useState(100); // 0-100
+  const [gradientPosition, setGradientPosition] = useState(50); // 0-100, 0=bas, 100=haut
+  const [runnerType, setRunnerType] = useState("SlallowRunner");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const glRef = useRef(null);
@@ -423,10 +596,37 @@ function CreateLurePage() {
             glRef.current = gl;
           }}
         >
-          <ambientLight intensity={0.7} />
-          <directionalLight position={[2, 5, 3]} intensity={1.4} />
-          <Environment preset="studio" />
-          <LureModel modelType={modelType} color={color} />
+          <ambientLight intensity={0.3} />
+          <directionalLight position={[2, 5, 3]} intensity={1.8} />
+          <directionalLight position={[-2, -3, -2]} intensity={1.0} />
+          <pointLight position={[0, 2, 2]} intensity={0.9} />
+          <Environment preset="sunset" />
+          <LureModel
+            modelType={modelType}
+            color={color}
+            useGradient={
+              modelType === "Lure11" ||
+              modelType === "Lure12" ||
+              modelType === "Lure13" ||
+              modelType === "Lure14" ||
+              modelType === "Lure15" ||
+              modelType === "Lure16"
+            }
+            gradientTop={gradientTop}
+            gradientBottom={gradientBottom}
+            gradientSmoothness={gradientStrength / 100}
+            gradientCenter={gradientPosition / 100}
+            gradientTargetName={
+              modelType === "Lure12" ||
+              modelType === "Lure13" ||
+              modelType === "Lure14" ||
+              modelType === "Lure15" ||
+              modelType === "Lure16"
+                ? "Cube"
+                : null
+            }
+            runnerType={runnerType}
+          />
           <OrbitControls enablePan enableZoom />
         </Canvas>
       </div>
@@ -471,33 +671,152 @@ function CreateLurePage() {
           <section className="panel" style={{ marginBottom: 12 }}>
             <h2 className="panel-title">Type de leurre</h2>
             <div className="home-type-filters">
-              {["Lure1", "Lure2", "Lure3", "Lure4", "Lure5", "Lure7"].map(
-                (type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    className={`home-type-filter-btn${
-                      modelType === type ? " home-type-filter-btn--active" : ""
-                    }`}
-                    onClick={() => setModelType(type)}
-                  >
-                    {type}
-                  </button>
-                ),
-              )}
+            {[
+              "Lure1",
+              "Lure2",
+              "Lure3",
+              "Lure4",
+              "Lure5",
+              "Lure7",
+              "Lure8",
+              "Lure9",
+              "Lure10",
+              "Lure11",
+              "Lure12",
+              "Lure13",
+              "Lure14",
+              "Lure15",
+              "Lure16",
+            ].map((type) => (
+              <button
+                key={type}
+                type="button"
+                className={`home-type-filter-btn${
+                  modelType === type ? " home-type-filter-btn--active" : ""
+                }`}
+                onClick={() => setModelType(type)}
+              >
+                {type}
+              </button>
+            ))}
+            </div>
+          </section>
+
+          <section className="panel" style={{ marginBottom: 12 }}>
+            <h2 className="panel-title">Type de nage</h2>
+            <div className="home-type-filters">
+              {["SlallowRunner", "MediumRunner", "DeepRunner"].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  className={`home-type-filter-btn${
+                    runnerType === type ? " home-type-filter-btn--active" : ""
+                  }`}
+                  onClick={() => setRunnerType(type)}
+                >
+                  {type}
+                </button>
+              ))}
             </div>
           </section>
 
           <section className="panel">
             <h2 className="panel-title">Couleur du leurre</h2>
-            <div className="color-picker-row">
-              <span>Couleur</span>
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-              />
-            </div>
+            {modelType === "Lure11" ||
+            modelType === "Lure12" ||
+            modelType === "Lure13" ||
+            modelType === "Lure14" ||
+            modelType === "Lure15" ||
+            modelType === "Lure16" ? (
+              <>
+                <div className="color-picker-row">
+                  <span>Couleur haut</span>
+                  <input
+                    type="color"
+                    value={gradientTop}
+                    onChange={(e) => setGradientTop(e.target.value)}
+                  />
+                </div>
+                <div className="color-picker-row">
+                  <span>Couleur bas</span>
+                  <input
+                    type="color"
+                    value={gradientBottom}
+                    onChange={(e) => setGradientBottom(e.target.value)}
+                  />
+                </div>
+                <div className="home-type-filters" style={{ marginTop: 8 }}>
+                  {[
+                    {
+                      name: "Orange / Turquoise",
+                      top: "#ff5500",
+                      bottom: "#00ffaa",
+                    },
+                    {
+                      name: "Rouge / Jaune",
+                      top: "#ff0000",
+                      bottom: "#ffff00",
+                    },
+                    {
+                      name: "Bleu / Violet",
+                      top: "#00aaff",
+                      bottom: "#aa00ff",
+                    },
+                  ].map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      className="home-type-filter-btn"
+                      onClick={() => {
+                        setGradientTop(preset.top);
+                        setGradientBottom(preset.bottom);
+                      }}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="color-picker-row" style={{ marginTop: 12 }}>
+                  <span>Degré de dégradé</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={gradientStrength}
+                    onChange={(e) => setGradientStrength(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ width: 40, textAlign: "right" }}>
+                    {gradientStrength}
+                  </span>
+                </div>
+                <div className="color-picker-row" style={{ marginTop: 8 }}>
+                  <span>Position du dégradé</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={gradientPosition}
+                    onChange={(e) => setGradientPosition(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ width: 40, textAlign: "right" }}>
+                    {gradientPosition}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="color-picker-row">
+                <span>Couleur</span>
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                />
+              </div>
+            )}
             {error && (
               <p className="lure-list-message lure-list-message--error">
                 {error}
