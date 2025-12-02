@@ -12,6 +12,7 @@ const PlasticGradientMaterial = shaderMaterial(
     envStrength: 0.2,
     gradientSmoothness: 1.0, // 0 = séparation nette, 1 = dégradé large
     gradientCenter: 0.5, // 0 = bas, 1 = haut
+    map: null, // texture de mask éventuellement
     lightDir: new THREE.Vector3(0.4, 0.8, 0.3).normalize(), // direction lumière
   },
   // vertex shader
@@ -46,6 +47,7 @@ const PlasticGradientMaterial = shaderMaterial(
     uniform float envStrength;
     uniform float gradientSmoothness;
     uniform float gradientCenter;
+    uniform sampler2D map;
     uniform vec3 lightDir;
 
     varying vec2 vUv;
@@ -89,6 +91,14 @@ const PlasticGradientMaterial = shaderMaterial(
         baseColor * diffuse      // lumière diffuse
         + spec * vec3(1.0)       // highlight blanc
         + fresnel * vec3(1.0);   // liseré clair
+
+      // Appliquer la texture de mask si présente (par multiplication)
+      vec4 texColor = texture2D(map, vUv);
+      // Si la texture a un alpha ou une luminosité, l'utiliser comme masque
+      float maskFactor = max(texColor.a, max(texColor.r, max(texColor.g, texColor.b)));
+      if (maskFactor > 0.001) {
+        color *= mix(vec3(1.0), texColor.rgb, maskFactor);
+      }
 
       gl_FragColor = vec4(color, 1.0);
     }

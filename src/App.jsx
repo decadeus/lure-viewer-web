@@ -44,6 +44,8 @@ function getModelPath(modelType) {
       return "/models/Lure15.glb";
     case "Lure16":
       return "/models/Lure16.glb";
+    case "Lure17":
+      return "/models/Lure17.glb";
     default:
       return "/models/Lure1.glb";
   }
@@ -142,12 +144,33 @@ function LureModel({
           if (gradientTargetName && child.name !== gradientTargetName) {
             return;
           }
+
+          const originalMat = child.material;
           let material = child.material;
 
           // Utiliser le matériau plastique avec gradient pour le corps (Cube)
           if (!(material instanceof PlasticGradientMaterial)) {
             material = new PlasticGradientMaterial();
+
+            // Si l'ancien matériau avait une texture (mask, etc.), la réutiliser
+            if (originalMat && originalMat.map) {
+              material.map = originalMat.map;
+              if (material.uniforms?.map) {
+                material.uniforms.map.value = originalMat.map;
+              }
+              material.needsUpdate = true;
+            }
+
             child.material = material;
+          } else {
+            // S'assurer que la texture de mask est bien branchée si déjà PlasticGradientMaterial
+            if (!material.map && originalMat && originalMat.map) {
+              material.map = originalMat.map;
+              if (material.uniforms?.map) {
+                material.uniforms.map.value = originalMat.map;
+              }
+              material.needsUpdate = true;
+            }
           }
 
           if (material.uniforms) {
@@ -189,7 +212,8 @@ function LureModel({
       modelType === "Lure13" ||
       modelType === "Lure14" ||
       modelType === "Lure15" ||
-      modelType === "Lure16"
+      modelType === "Lure16" ||
+      modelType === "Lure17"
     ) {
       return;
     }
@@ -283,6 +307,7 @@ useGLTF.preload("/models/Lure13.glb");
 useGLTF.preload("/models/Lure14.glb");
 useGLTF.preload("/models/Lure15.glb");
 useGLTF.preload("/models/Lure16.glb");
+useGLTF.preload("/models/Lure17.glb");
 
 // ----------- Page principale : liste de cartes de leurres -----------
 
@@ -662,7 +687,8 @@ function CreateLurePage() {
               modelType === "Lure13" ||
               modelType === "Lure14" ||
               modelType === "Lure15" ||
-              modelType === "Lure16"
+              modelType === "Lure16" ||
+              modelType === "Lure17"
             }
             gradientTop={gradientTop}
             gradientBottom={gradientBottom}
@@ -673,7 +699,8 @@ function CreateLurePage() {
               modelType === "Lure13" ||
               modelType === "Lure14" ||
               modelType === "Lure15" ||
-              modelType === "Lure16"
+              modelType === "Lure16" ||
+              modelType === "Lure17"
                 ? "Cube"
                 : null
             }
@@ -739,6 +766,7 @@ function CreateLurePage() {
               "Lure14",
               "Lure15",
               "Lure16",
+              "Lure17",
             ].map((type) => (
               <button
                 key={type}
