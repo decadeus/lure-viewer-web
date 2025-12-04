@@ -14,50 +14,6 @@ import { PlasticGradientMaterial } from "./PlasticGradientMaterial";
 
 function getModelPath(modelType) {
   switch (modelType) {
-    case "Lure1":
-      return "/models/Lure1.glb";
-    case "Lure2":
-      return "/models/Lure2.glb";
-    case "Lure3":
-      return "/models/Lure3.glb";
-    case "Lure4":
-      return "/models/Lure4.glb";
-    case "Lure5":
-      return "/models/Lure5.glb";
-    case "Lure7":
-      return "/models/Lure7.glb";
-    case "Lure8":
-      return "/models/Lure8.glb";
-    case "Lure9":
-      return "/models/Lure9.glb";
-    case "Lure10":
-      return "/models/Lure10.glb";
-    case "Lure11":
-      return "/models/Lure11.glb";
-    case "Lure12":
-      return "/models/Lure12.glb";
-    case "Lure13":
-      return "/models/Lure13.glb";
-    case "Lure14":
-      return "/models/Lure14.glb";
-    case "Lure15":
-      return "/models/Lure15.glb";
-    case "Lure16":
-      return "/models/Lure16.glb";
-    case "Lure17":
-      return "/models/Lure17.glb";
-    case "Lure18":
-      return "/models/Lure18.glb";
-    case "Lure19":
-      return "/models/Lure19.glb";
-    case "Lure20":
-      return "/models/Lure20.glb";
-    case "Lure21":
-      return "/models/Lure21.glb";
-    case "Lure22":
-      return "/models/Lure22.glb";
-    case "Lure25":
-      return "/models/Lure25.glb";
     case "Lure26":
       return "/models/Lure26.glb";
     case "Lure27":
@@ -67,7 +23,8 @@ function getModelPath(modelType) {
     case "Lure29":
       return "/models/Lure29.glb";
     default:
-      return "/models/Lure1.glb";
+      // fallback sûr pour les anciens enregistrements (Lure1-25) :
+      return "/models/Lure29.glb";
   }
 }
 
@@ -666,28 +623,6 @@ function DualPositionSlider({ min = 0, max = 100, valueLow, valueHigh, onChange 
   );
 }
 
-useGLTF.preload("/models/Lure1.glb");
-useGLTF.preload("/models/Lure2.glb");
-useGLTF.preload("/models/Lure3.glb");
-useGLTF.preload("/models/Lure4.glb");
-useGLTF.preload("/models/Lure5.glb");
-useGLTF.preload("/models/Lure7.glb");
-useGLTF.preload("/models/Lure8.glb");
-useGLTF.preload("/models/Lure9.glb");
-useGLTF.preload("/models/Lure10.glb");
-useGLTF.preload("/models/Lure11.glb");
-useGLTF.preload("/models/Lure12.glb");
-useGLTF.preload("/models/Lure13.glb");
-useGLTF.preload("/models/Lure14.glb");
-useGLTF.preload("/models/Lure15.glb");
-useGLTF.preload("/models/Lure16.glb");
-useGLTF.preload("/models/Lure17.glb");
-useGLTF.preload("/models/Lure18.glb");
-useGLTF.preload("/models/Lure19.glb");
-useGLTF.preload("/models/Lure20.glb");
-useGLTF.preload("/models/Lure21.glb");
-useGLTF.preload("/models/Lure22.glb");
-useGLTF.preload("/models/Lure25.glb");
 useGLTF.preload("/models/Lure26.glb");
 useGLTF.preload("/models/Lure27.glb");
 useGLTF.preload("/models/Lure28.glb");
@@ -954,7 +889,7 @@ function HomePage() {
 function CreateLurePage() {
   const { user, initializing } = useAuth();
   const navigate = useNavigate();
-  const [modelType, setModelType] = useState("Lure1");
+  const [modelType, setModelType] = useState("Lure26");
   const [color, setColor] = useState("#ff0000");
   const [gradientTop, setGradientTop] = useState("#ff5500");
   const [gradientMiddle, setGradientMiddle] = useState("#ffffff");
@@ -1182,34 +1117,7 @@ function CreateLurePage() {
                 onChange={(e) => setModelType(e.target.value)}
                 style={{ flex: 1, padding: "6px 8px" }}
               >
-                {[
-                  "Lure1",
-                  "Lure2",
-                  "Lure3",
-                  "Lure4",
-                  "Lure5",
-                  "Lure7",
-                  "Lure8",
-                  "Lure9",
-                  "Lure10",
-                  "Lure11",
-                  "Lure12",
-                  "Lure13",
-                  "Lure14",
-                  "Lure15",
-                  "Lure16",
-                  "Lure17",
-                  "Lure18",
-                  "Lure19",
-                  "Lure20",
-                  "Lure21",
-                  "Lure22",
-                  "Lure25",
-                  "Lure26",
-                  "Lure27",
-                  "Lure28",
-                  "Lure29",
-                ].map((type) => (
+                {["Lure26", "Lure27", "Lure28", "Lure29"].map((type) => (
                   <option key={type} value={type}>
                     {type}
                   </option>
