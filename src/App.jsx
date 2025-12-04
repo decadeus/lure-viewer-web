@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Routes, Route, useNavigate, useParams } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Environment, useGLTF } from "@react-three/drei";
+import { OrbitControls, Environment, useGLTF, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import "./App.css";
 import { supabase } from "./supabaseClient";
@@ -46,6 +46,26 @@ function getModelPath(modelType) {
       return "/models/Lure16.glb";
     case "Lure17":
       return "/models/Lure17.glb";
+    case "Lure18":
+      return "/models/Lure18.glb";
+    case "Lure19":
+      return "/models/Lure19.glb";
+    case "Lure20":
+      return "/models/Lure20.glb";
+    case "Lure21":
+      return "/models/Lure21.glb";
+    case "Lure22":
+      return "/models/Lure22.glb";
+    case "Lure25":
+      return "/models/Lure25.glb";
+    case "Lure26":
+      return "/models/Lure26.glb";
+    case "Lure27":
+      return "/models/Lure27.glb";
+    case "Lure28":
+      return "/models/Lure28.glb";
+    case "Lure29":
+      return "/models/Lure29.glb";
     default:
       return "/models/Lure1.glb";
   }
@@ -56,17 +76,37 @@ function LureModel({
   color,
   useGradient = false,
   gradientTop = "#ff5500",
+  gradientMiddle = "#ffffff",
   gradientBottom = "#00ffaa",
   gradientSmoothness = 1,
   gradientCenter = 0.5,
+  gradientSmoothness2 = 1,
+  gradientCenter2 = 0.66,
   gradientTargetName = null,
   runnerType = null,
+  maskType = "none",
+  collectionType = null, // "Palette" | "Hoo_B" | null
+  textureUrl = null,
 }) {
   const modelPath = getModelPath(modelType);
-  const { scene } = useGLTF(modelPath);
+  const gltf = useGLTF(modelPath);
+  const { scene } = gltf;
+  // Charger une texture (même si on ne l'utilise pas toujours) pour respecter les règles des hooks.
+  const colorTexture = useTexture(textureUrl || "/textures/piketexture2.png");
+  const hasTexture = !!textureUrl;
 
   useEffect(() => {
     if (!scene) return;
+
+    // DEBUG (désactivé) : affichage des textures GLTF
+    // if (gltf.textures && gltf.textures.length) {
+    //   // eslint-disable-next-line no-console
+    //   console.warn(
+    //     "GLTF textures for",
+    //     modelType,
+    //     (gltf.textures || []).map((t) => t.name || (t.image && t.image.name)),
+    //   );
+    // }
 
     if (!scene.userData.normalized) {
       const box = new THREE.Box3().setFromObject(scene);
@@ -77,7 +117,33 @@ function LureModel({
       scene.position.sub(center);
       const scaleFactor = 1.5 / maxDim;
       scene.scale.setScalar(scaleFactor);
+
+      // stocker les bornes verticales normalisées pour le shader de dégradé
+      const normalizedBox = new THREE.Box3().setFromObject(scene);
+      scene.userData.gradientHeightMin = normalizedBox.min.y;
+      scene.userData.gradientHeightMax = normalizedBox.max.y;
+
       scene.userData.normalized = true;
+    }
+
+    // DEBUG: loguer une fois la liste des meshes et matériaux du modèle
+    if (!scene.userData.loggedMeshes) {
+      const meshInfos = [];
+      scene.traverse((child) => {
+        if (child.isMesh) {
+          meshInfos.push({
+            name: child.name,
+            materialName: child.material?.name || null,
+          });
+        }
+      });
+      // eslint-disable-next-line no-console
+      console.log("LureModel meshes", {
+        modelType,
+        maskType,
+        meshes: meshInfos,
+      });
+      scene.userData.loggedMeshes = true;
     }
 
     // Forcer les yeux en noir et brillants si présents
@@ -105,6 +171,17 @@ function LureModel({
 
     // Gestion des différents "runners" (Slallow / Medium / Deep)
     const runnerNames = ["SlallowRunner", "MediumRunner", "DeepRunner"];
+    // Meshes de la palette métallique (voir log LureModel meshes pour Lure28)
+    const paletteMeshNames = new Set([
+      "Cube001",
+      "Cylinder",
+      "Cylinder001",
+      "Torus006",
+      "Torus007",
+      "Torus008",
+    ]);
+    // Meshes du Hoo_B (utilisés pour le basculement de collection)
+    const hooBMeshNames = new Set(["Torus002", "Torus004", "Triple001"]);
     if (runnerType && runnerNames.includes(runnerType)) {
       scene.traverse((child) => {
         if (child.isMesh && runnerNames.includes(child.name)) {
@@ -134,10 +211,142 @@ function LureModel({
       });
     }
 
+    // Gestion des collections spécifiques à Lure25/Lure26/Lure27/Lure28/Lure29 (Palette / Hoo_B)
+    if (
+      (modelType === "Lure25" ||
+        modelType === "Lure26" ||
+        modelType === "Lure27" ||
+        modelType === "Lure28" ||
+        modelType === "Lure29") &&
+      collectionType
+    ) {
+      const collectionNames = ["Palette", "Hoo_B"];
+
+      scene.traverse((child) => {
+        // 1) Si on a des noeuds/groupes nommés "Palette" / "Hoo_B", on les bascule directement
+        let current = child;
+        let collection = null;
+        while (current && !collection) {
+          if (collectionNames.includes(current.name)) {
+            collection = current.name;
+            break;
+          }
+          current = current.parent;
+        }
+
+        if (collection) {
+          child.visible = collection === collectionType;
+          return;
+        }
+
+        // 2) Fallback par nom de mesh (cas Lure28 : les collections Blender ne sont pas exportées)
+        if (!child.isMesh) return;
+
+        const isPaletteMesh = paletteMeshNames.has(child.name);
+        const isHooBMesh = hooBMeshNames.has(child.name);
+        if (!isPaletteMesh && !isHooBMesh) return;
+
+        if (collectionType === "Palette") {
+          child.visible = isPaletteMesh;
+        } else if (collectionType === "Hoo_B") {
+          child.visible = isHooBMesh;
+        }
+      });
+    }
+
+    // Gestion des masks (Pike / Card) via la visibilité des meshes
+    if (modelType === "Lure21" || modelType === "Lure22") {
+      // Nouveau comportement spécifique à Lure21/Lure22 :
+      // - le corps (Cube) reste toujours visible
+      // - les meshes de mask sont activés/désactivés selon le bouton choisi
+      scene.traverse((child) => {
+        if (!child.isMesh) return;
+
+        const rawName = child.name || "";
+        const rawMatName = child.material?.name || "";
+        const name = rawName.toLowerCase();
+        const matName = rawMatName.toLowerCase();
+
+        // Corps du leurre : mesh "Cube"
+        if (rawName === "Cube") {
+          child.visible = true;
+          child.renderOrder = 0;
+          return;
+        }
+
+        // Mesh de mask brochet : Cube_PikeMask / Mat_PikeMask
+        const isPike =
+          rawName === "Cube_PikeMask" ||
+          name.includes("cube_pikemask") ||
+          rawMatName === "Mat_PikeMask" ||
+          matName.includes("mat_pikemask");
+
+        // Mesh de mask points : Cube_CardMask / Mat_CardMask
+        const isCard =
+          rawName === "Cube_CardMask" ||
+          name.includes("cube_cardmask") ||
+          rawMatName === "Mat_CardMask" ||
+          matName.includes("mat_cardmask");
+
+        if (!isPike && !isCard) return;
+
+        // S'assurer que les masks se dessinent au-dessus du corps
+        if (child.material) {
+          child.material.transparent = true;
+          child.material.depthWrite = false;
+          child.renderOrder = 1;
+        }
+
+        if (maskType === "none") {
+          child.visible = false;
+        } else if (maskType === "pike") {
+          child.visible = isPike;
+        } else if (maskType === "card") {
+          child.visible = isCard;
+        }
+      });
+    } else {
+      // Comportement générique existant pour les autres modèles
+      scene.traverse((child) => {
+        if (!child.isMesh) return;
+        const childName = child.name?.toLowerCase?.() || "";
+        const matName = child.material?.name?.toLowerCase?.() || "";
+
+        const isPike =
+          childName.includes("pike") ||
+          matName.includes("pike_mask") ||
+          matName.includes("pike");
+        const isCard =
+          childName.includes("card") ||
+          matName.includes("card_mask") ||
+          matName.includes("modif_card") ||
+          matName.includes("card");
+
+        if (!isPike && !isCard) return;
+
+        if (maskType === "none") {
+          child.visible = false;
+        } else if (maskType === "pike") {
+          child.visible = isPike;
+        } else if (maskType === "card") {
+          child.visible = isCard;
+        }
+      });
+    }
+
     // Si on utilise le matériau dégradé, on remplace/paramètre les matériaux du modèle
     if (useGradient) {
       const topColor = new THREE.Color(gradientTop);
+      const midColor = new THREE.Color(gradientMiddle);
       const bottomColor = new THREE.Color(gradientBottom);
+      const heightMin =
+        typeof scene.userData.gradientHeightMin === "number"
+          ? scene.userData.gradientHeightMin
+          : -0.75;
+      const heightMax =
+        typeof scene.userData.gradientHeightMax === "number"
+          ? scene.userData.gradientHeightMax
+          : 0.75;
 
       scene.traverse((child) => {
         if (child.isMesh) {
@@ -145,32 +354,12 @@ function LureModel({
             return;
           }
 
-          const originalMat = child.material;
           let material = child.material;
 
           // Utiliser le matériau plastique avec gradient pour le corps (Cube)
           if (!(material instanceof PlasticGradientMaterial)) {
             material = new PlasticGradientMaterial();
-
-            // Si l'ancien matériau avait une texture (mask, etc.), la réutiliser
-            if (originalMat && originalMat.map) {
-              material.map = originalMat.map;
-              if (material.uniforms?.map) {
-                material.uniforms.map.value = originalMat.map;
-              }
-              material.needsUpdate = true;
-            }
-
             child.material = material;
-          } else {
-            // S'assurer que la texture de mask est bien branchée si déjà PlasticGradientMaterial
-            if (!material.map && originalMat && originalMat.map) {
-              material.map = originalMat.map;
-              if (material.uniforms?.map) {
-                material.uniforms.map.value = originalMat.map;
-              }
-              material.needsUpdate = true;
-            }
           }
 
           if (material.uniforms) {
@@ -178,7 +367,10 @@ function LureModel({
               material.uniforms.colorA.value.copy(topColor);
             }
             if (material.uniforms.colorB) {
-              material.uniforms.colorB.value.copy(bottomColor);
+              material.uniforms.colorB.value.copy(midColor);
+            }
+            if (material.uniforms.colorC) {
+              material.uniforms.colorC.value.copy(bottomColor);
             }
             // Degré de dégradé -> douceur du gradient (0 = coupure nette, 1 = très doux)
             if (material.uniforms.gradientSmoothness) {
@@ -188,6 +380,22 @@ function LureModel({
             if (material.uniforms.gradientCenter) {
               material.uniforms.gradientCenter.value = gradientCenter;
             }
+
+            // Deuxième frontière (milieu/bas)
+            if (material.uniforms.gradientSmoothness2) {
+              material.uniforms.gradientSmoothness2.value = gradientSmoothness2;
+            }
+            if (material.uniforms.gradientCenter2) {
+              material.uniforms.gradientCenter2.value = gradientCenter2;
+            }
+
+            if (material.uniforms.heightMin) {
+              material.uniforms.heightMin.value = heightMin;
+            }
+            if (material.uniforms.heightMax) {
+              material.uniforms.heightMax.value = heightMax;
+            }
+
             if (material.uniforms.glossiness) {
               material.uniforms.glossiness.value = 0.9;
             }
@@ -196,6 +404,11 @@ function LureModel({
             }
             if (material.uniforms.envStrength) {
               material.uniforms.envStrength.value = 0.4;
+            }
+
+            // Appliquer éventuelle texture de couleur (pike, etc.)
+            if (material.uniforms.map) {
+              material.uniforms.map.value = hasTexture ? colorTexture : null;
             }
           }
         }
@@ -213,14 +426,63 @@ function LureModel({
       modelType === "Lure14" ||
       modelType === "Lure15" ||
       modelType === "Lure16" ||
-      modelType === "Lure17"
+      modelType === "Lure17" ||
+      modelType === "Lure18" ||
+      modelType === "Lure19"
     ) {
       return;
     }
 
     const targetColor = new THREE.Color(color);
+    const isPaletteLure =
+      modelType === "Lure25" ||
+      modelType === "Lure26" ||
+      modelType === "Lure27" ||
+      modelType === "Lure28" ||
+      modelType === "Lure29";
     scene.traverse((child) => {
       if (child.isMesh && child.material && child.material.color) {
+        const matName = child.material.name?.toLowerCase?.() || "";
+
+        // Ne jamais toucher aux matériaux de mask (Pike / Card)
+        if (
+          matName.includes("pike_mask") ||
+          matName.includes("modif_card") ||
+          matName.includes("mat_pikemask") ||
+          matName.includes("mat_cardmask")
+        ) {
+          return;
+        }
+
+        // Palette métallique : on conserve la couleur / le relief Blender,
+        // mais on renforce l'aspect métal / reflet.
+        if (paletteMeshNames.has(child.name)) {
+          const mat = child.material;
+          if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+            // ne pas toucher à mat.color (couleur exportée)
+            mat.metalness = 1.0;
+            mat.roughness = 0.08;
+            mat.envMapIntensity = 3.5;
+            if ("clearcoat" in mat) {
+              mat.clearcoat = 1.0;
+              mat.clearcoatRoughness = 0.04;
+            }
+          }
+          return;
+        }
+
+        // Hoo_B (Torus / Triple) : gris foncé fixe, légèrement métallique
+        if (hooBMeshNames.has(child.name)) {
+          const mat = child.material;
+          child.material.color.set("#333333");
+          if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+            mat.roughness = 0.3;
+            mat.metalness = 0.6;
+            mat.envMapIntensity = 1.5;
+          }
+          return;
+        }
+
         // Bavettes / palettes: toujours plastique blanc opaque
         if (runnerNames.includes(child.name)) {
           child.material.color.set("#ffffff");
@@ -232,6 +494,19 @@ function LureModel({
             mat.metalness = 0.05;
             mat.envMapIntensity = 1.2;
           }
+          return;
+        }
+
+        // Pour les modèles à palette (Lure25-29), seul le corps "Cube" prend la couleur.
+        // Les anneaux, émerillons, crochets, etc. gardent leur matériau Blender.
+        if (
+          (modelType === "Lure25" ||
+            modelType === "Lure26" ||
+            modelType === "Lure27" ||
+            modelType === "Lure28" ||
+            modelType === "Lure29") &&
+          child.name !== "Cube"
+        ) {
           return;
         }
 
@@ -252,11 +527,11 @@ function LureModel({
         ) {
           const physical = new THREE.MeshPhysicalMaterial({
             color: mat.color.clone(),
-            metalness: 0.85,
-            roughness: 0.03,
+            metalness: isPaletteLure ? 0.35 : 0.85,
+            roughness: isPaletteLure ? 0.16 : 0.03,
             clearcoat: 1.0,
-            clearcoatRoughness: 0.02,
-            envMapIntensity: 3.0,
+            clearcoatRoughness: isPaletteLure ? 0.06 : 0.02,
+            envMapIntensity: isPaletteLure ? 1.8 : 3.0,
           });
           if (mat.map) physical.map = mat.map;
           if (mat.normalMap) physical.normalMap = mat.normalMap;
@@ -266,12 +541,24 @@ function LureModel({
         }
 
         if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
-          mat.roughness = 0.03; // quasi miroir
-          mat.metalness = 0.85; // très métallique
-          mat.envMapIntensity = 3.0;
-          if ("clearcoat" in mat) {
-            mat.clearcoat = 1.0;
-            mat.clearcoatRoughness = 0.02;
+          if (isPaletteLure) {
+            // Aspect plastique brillant : moins métallique, un peu plus de roughness
+            mat.roughness = 0.16;
+            mat.metalness = 0.35;
+            mat.envMapIntensity = 1.8;
+            if ("clearcoat" in mat) {
+              mat.clearcoat = 1.0;
+              mat.clearcoatRoughness = 0.06;
+            }
+          } else {
+            // Aspect très métallique pour les autres leurres
+            mat.roughness = 0.03; // quasi miroir
+            mat.metalness = 0.85; // très métallique
+            mat.envMapIntensity = 3.0;
+            if ("clearcoat" in mat) {
+              mat.clearcoat = 1.0;
+              mat.clearcoatRoughness = 0.02;
+            }
           }
         }
       }
@@ -282,14 +569,101 @@ function LureModel({
     modelType,
     useGradient,
     gradientTop,
+    gradientMiddle,
     gradientBottom,
     gradientSmoothness,
     gradientCenter,
+    gradientSmoothness2,
+    gradientCenter2,
     gradientTargetName,
     runnerType,
+    maskType,
+    collectionType,
+    colorTexture,
+    hasTexture,
   ]);
 
   return <primitive object={scene} />;
+}
+
+// Slider avec 2 curseurs (bas / haut) sur une seule barre, utilisé pour le gradient 3 couleurs
+function DualPositionSlider({ min = 0, max = 100, valueLow, valueHigh, onChange }) {
+  const trackRef = useRef(null);
+
+  const clampValue = (val) => Math.min(max, Math.max(min, val));
+
+  const handlePointerDown = (which) => (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const getClientX = (e) => {
+      if (e.touches && e.touches.length) return e.touches[0].clientX;
+      return e.clientX;
+    };
+
+    const move = (moveEvent) => {
+      if (!trackRef.current) return;
+      const rect = trackRef.current.getBoundingClientRect();
+      const clientX = getClientX(moveEvent);
+      const ratio = (clientX - rect.left) / rect.width;
+      const raw = min + ratio * (max - min);
+      const val = clampValue(Math.round(raw));
+
+      let low = valueLow;
+      let high = valueHigh;
+
+      if (which === "low") {
+        low = Math.min(val, high - 1);
+      } else {
+        high = Math.max(val, low + 1);
+      }
+
+      onChange(low, high);
+    };
+
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
+    };
+
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move);
+    window.addEventListener("touchend", up);
+
+    move(event);
+  };
+
+  const range = max - min || 1;
+  const lowPct = ((valueLow - min) / range) * 100;
+  const highPct = ((valueHigh - min) / range) * 100;
+
+  return (
+    <div className="dual-range">
+      <div className="dual-range-track" ref={trackRef}>
+        <div
+          className="dual-range-fill"
+          style={{ left: `${lowPct}%`, right: `${100 - highPct}%` }}
+        />
+        <button
+          type="button"
+          className="dual-range-thumb"
+          style={{ left: `${lowPct}%` }}
+          onMouseDown={handlePointerDown("low")}
+          onTouchStart={handlePointerDown("low")}
+        />
+        <button
+          type="button"
+          className="dual-range-thumb"
+          style={{ left: `${highPct}%` }}
+          onMouseDown={handlePointerDown("high")}
+          onTouchStart={handlePointerDown("high")}
+        />
+      </div>
+    </div>
+  );
 }
 
 useGLTF.preload("/models/Lure1.glb");
@@ -308,6 +682,16 @@ useGLTF.preload("/models/Lure14.glb");
 useGLTF.preload("/models/Lure15.glb");
 useGLTF.preload("/models/Lure16.glb");
 useGLTF.preload("/models/Lure17.glb");
+useGLTF.preload("/models/Lure18.glb");
+useGLTF.preload("/models/Lure19.glb");
+useGLTF.preload("/models/Lure20.glb");
+useGLTF.preload("/models/Lure21.glb");
+useGLTF.preload("/models/Lure22.glb");
+useGLTF.preload("/models/Lure25.glb");
+useGLTF.preload("/models/Lure26.glb");
+useGLTF.preload("/models/Lure27.glb");
+useGLTF.preload("/models/Lure28.glb");
+useGLTF.preload("/models/Lure29.glb");
 
 // ----------- Page principale : liste de cartes de leurres -----------
 
@@ -539,7 +923,11 @@ function HomePage() {
                   modelType={previewLure.model_type}
                   color={previewLure.color || "#ffffff"}
                 />
-                <OrbitControls enablePan enableZoom />
+                <OrbitControls
+                  enablePan={false}
+                  enableZoom
+                  target={[0, 0, 0]}
+                />
               </Canvas>
             </div>
 
@@ -569,10 +957,16 @@ function CreateLurePage() {
   const [modelType, setModelType] = useState("Lure1");
   const [color, setColor] = useState("#ff0000");
   const [gradientTop, setGradientTop] = useState("#ff5500");
+  const [gradientMiddle, setGradientMiddle] = useState("#ffffff");
   const [gradientBottom, setGradientBottom] = useState("#00ffaa");
-  const [gradientStrength, setGradientStrength] = useState(100); // 0-100
-  const [gradientPosition, setGradientPosition] = useState(50); // 0-100, 0=bas, 100=haut
+  const [gradientStrength, setGradientStrength] = useState(100); // 0-100 (haut/milieu)
+  const [gradientPosition, setGradientPosition] = useState(33); // 0-100, 0=bas, 100=haut (frontière haut/milieu)
+  const [gradientStrength2, setGradientStrength2] = useState(100); // 0-100 (milieu/bas)
+  const [gradientPosition2, setGradientPosition2] = useState(66); // 0-100 (frontière milieu/bas)
   const [runnerType, setRunnerType] = useState("SlallowRunner");
+  const [maskType, setMaskType] = useState("none"); // "none" | "pike" | "card"
+  const [collectionType, setCollectionType] = useState("Palette"); // pour Lure25/26/27/28 : "Palette" | "Hoo_B"
+  const [usePikeTexture, setUsePikeTexture] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const glRef = useRef(null);
@@ -688,25 +1082,57 @@ function CreateLurePage() {
               modelType === "Lure14" ||
               modelType === "Lure15" ||
               modelType === "Lure16" ||
-              modelType === "Lure17"
+              modelType === "Lure17" ||
+              modelType === "Lure18" ||
+              modelType === "Lure19" ||
+              modelType === "Lure20" ||
+              modelType === "Lure21" ||
+              modelType === "Lure22" ||
+              modelType === "Lure29"
             }
             gradientTop={gradientTop}
+            gradientMiddle={gradientMiddle}
             gradientBottom={gradientBottom}
             gradientSmoothness={gradientStrength / 100}
             gradientCenter={gradientPosition / 100}
+            // On garde toujours un minimum de douceur pour que le bas reste visible,
+            // même quand le slider est à 0.
+            gradientSmoothness2={gradientStrength2 / 100}
+            gradientCenter2={gradientPosition2 / 100}
             gradientTargetName={
               modelType === "Lure12" ||
               modelType === "Lure13" ||
               modelType === "Lure14" ||
               modelType === "Lure15" ||
               modelType === "Lure16" ||
-              modelType === "Lure17"
+              modelType === "Lure17" ||
+              modelType === "Lure18" ||
+              modelType === "Lure19" ||
+              modelType === "Lure20" ||
+              modelType === "Lure21" ||
+              modelType === "Lure22" ||
+              modelType === "Lure29"
                 ? "Cube"
                 : null
             }
             runnerType={runnerType}
+            maskType={maskType}
+            collectionType={
+              modelType === "Lure25" ||
+              modelType === "Lure26" ||
+              modelType === "Lure27" ||
+              modelType === "Lure28" ||
+              modelType === "Lure29"
+                ? collectionType
+                : null
+            }
+            textureUrl={usePikeTexture ? "/textures/piketexture2.png" : null}
           />
-          <OrbitControls enablePan enableZoom />
+          <OrbitControls
+            enablePan={false}
+            enableZoom
+            target={[0, 0, 0]}
+          />
         </Canvas>
       </div>
 
@@ -749,36 +1175,46 @@ function CreateLurePage() {
         <form onSubmit={handleSubmit}>
           <section className="panel" style={{ marginBottom: 12 }}>
             <h2 className="panel-title">Type de leurre</h2>
-            <div className="home-type-filters">
-            {[
-              "Lure1",
-              "Lure2",
-              "Lure3",
-              "Lure4",
-              "Lure5",
-              "Lure7",
-              "Lure8",
-              "Lure9",
-              "Lure10",
-              "Lure11",
-              "Lure12",
-              "Lure13",
-              "Lure14",
-              "Lure15",
-              "Lure16",
-              "Lure17",
-            ].map((type) => (
-              <button
-                key={type}
-                type="button"
-                className={`home-type-filter-btn${
-                  modelType === type ? " home-type-filter-btn--active" : ""
-                }`}
-                onClick={() => setModelType(type)}
+            <div className="color-picker-row">
+              <span>Modèle</span>
+              <select
+                value={modelType}
+                onChange={(e) => setModelType(e.target.value)}
+                style={{ flex: 1, padding: "6px 8px" }}
               >
-                {type}
-              </button>
-            ))}
+                {[
+                  "Lure1",
+                  "Lure2",
+                  "Lure3",
+                  "Lure4",
+                  "Lure5",
+                  "Lure7",
+                  "Lure8",
+                  "Lure9",
+                  "Lure10",
+                  "Lure11",
+                  "Lure12",
+                  "Lure13",
+                  "Lure14",
+                  "Lure15",
+                  "Lure16",
+                  "Lure17",
+                  "Lure18",
+                  "Lure19",
+                  "Lure20",
+                  "Lure21",
+                  "Lure22",
+                  "Lure25",
+                  "Lure26",
+                  "Lure27",
+                  "Lure28",
+                  "Lure29",
+                ].map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
             </div>
           </section>
 
@@ -800,6 +1236,35 @@ function CreateLurePage() {
             </div>
           </section>
 
+          {(modelType === "Lure25" ||
+            modelType === "Lure26" ||
+            modelType === "Lure27" ||
+            modelType === "Lure28" ||
+            modelType === "Lure29") && (
+            <section className="panel">
+              <h2 className="panel-title">Collection (Palette / Hoo_B)</h2>
+              <div className="home-type-filters">
+                {[
+                  { key: "Palette", label: "Palette" },
+                  { key: "Hoo_B", label: "Hoo_B" },
+                ].map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    className={`home-type-filter-btn${
+                      collectionType === opt.key
+                        ? " home-type-filter-btn--active"
+                        : ""
+                    }`}
+                    onClick={() => setCollectionType(opt.key)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="panel">
             <h2 className="panel-title">Couleur du leurre</h2>
             {modelType === "Lure11" ||
@@ -807,7 +1272,14 @@ function CreateLurePage() {
             modelType === "Lure13" ||
             modelType === "Lure14" ||
             modelType === "Lure15" ||
-            modelType === "Lure16" ? (
+            modelType === "Lure16" ||
+            modelType === "Lure17" ||
+            modelType === "Lure18" ||
+            modelType === "Lure19" ||
+            modelType === "Lure20" ||
+            modelType === "Lure21" ||
+            modelType === "Lure22" ||
+            modelType === "Lure29" ? (
               <>
                 <div className="color-picker-row">
                   <span>Couleur haut</span>
@@ -818,6 +1290,14 @@ function CreateLurePage() {
                   />
                 </div>
                 <div className="color-picker-row">
+                  <span>Couleur milieu</span>
+                  <input
+                    type="color"
+                    value={gradientMiddle}
+                    onChange={(e) => setGradientMiddle(e.target.value)}
+                  />
+                </div>
+                <div className="color-picker-row">
                   <span>Couleur bas</span>
                   <input
                     type="color"
@@ -825,39 +1305,8 @@ function CreateLurePage() {
                     onChange={(e) => setGradientBottom(e.target.value)}
                   />
                 </div>
-                <div className="home-type-filters" style={{ marginTop: 8 }}>
-                  {[
-                    {
-                      name: "Orange / Turquoise",
-                      top: "#ff5500",
-                      bottom: "#00ffaa",
-                    },
-                    {
-                      name: "Rouge / Jaune",
-                      top: "#ff0000",
-                      bottom: "#ffff00",
-                    },
-                    {
-                      name: "Bleu / Violet",
-                      top: "#00aaff",
-                      bottom: "#aa00ff",
-                    },
-                  ].map((preset) => (
-                    <button
-                      key={preset.name}
-                      type="button"
-                      className="home-type-filter-btn"
-                      onClick={() => {
-                        setGradientTop(preset.top);
-                        setGradientBottom(preset.bottom);
-                      }}
-                    >
-                      {preset.name}
-                    </button>
-                  ))}
-                </div>
                 <div className="color-picker-row" style={{ marginTop: 12 }}>
-                  <span>Degré de dégradé</span>
+                  <span>Degré dégradé haut</span>
                   <input
                     type="range"
                     min={0}
@@ -872,20 +1321,73 @@ function CreateLurePage() {
                   </span>
                 </div>
                 <div className="color-picker-row" style={{ marginTop: 8 }}>
-                  <span>Position du dégradé</span>
+                  <span>Degré dégradé bas</span>
                   <input
                     type="range"
                     min={0}
                     max={100}
                     step={1}
-                    value={gradientPosition}
-                    onChange={(e) => setGradientPosition(Number(e.target.value))}
+                    value={gradientStrength2}
+                    onChange={(e) => setGradientStrength2(Number(e.target.value))}
                     style={{ flex: 1 }}
                   />
                   <span style={{ width: 40, textAlign: "right" }}>
-                    {gradientPosition}
+                    {gradientStrength2}
                   </span>
                 </div>
+                <div className="color-picker-row" style={{ marginTop: 8 }}>
+                  <span>Positions B / H</span>
+                  <div style={{ flex: 1 }}>
+                    <DualPositionSlider
+                      valueLow={gradientPosition2}
+                      valueHigh={gradientPosition}
+                      onChange={(low, high) => {
+                        setGradientPosition2(low);
+                        setGradientPosition(high);
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="color-picker-row" style={{ marginTop: 8 }}>
+                  <span>Texture Pike</span>
+                  <button
+                    type="button"
+                    className={`home-type-filter-btn${
+                      usePikeTexture ? " home-type-filter-btn--active" : ""
+                    }`}
+                    onClick={() => setUsePikeTexture((v) => !v)}
+                  >
+                    {usePikeTexture ? "Activée" : "Désactivée"}
+                  </button>
+                </div>
+                {(modelType === "Lure17" ||
+                  modelType === "Lure18" ||
+                  modelType === "Lure19" ||
+                  modelType === "Lure20" ||
+                  modelType === "Lure21" ||
+                  modelType === "Lure22") && (
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Mask</span>
+                    <div className="home-type-filters" style={{ flex: 1 }}>
+                      {[
+                        { key: "none", label: "Aucun" },
+                        { key: "pike", label: "Pike" },
+                        { key: "card", label: "Points" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          className={`home-type-filter-btn${
+                            maskType === opt.key ? " home-type-filter-btn--active" : ""
+                          }`}
+                          onClick={() => setMaskType(opt.key)}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="color-picker-row">
