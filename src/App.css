@@ -29,7 +29,7 @@
 }
 
 .viewer-container {
-  flex: 1;
+  flex: 1.4;
   position: relative;
 }
 
@@ -58,6 +58,301 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+/* Layout éditeur à trois colonnes (gauche = bibliothèque, centre = 3D, droite = panneau) */
+.editor-layout {
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+.editor-sidebar {
+  width: 220px;
+  background: rgba(15, 23, 42, 0.96);
+  border-right: 1px solid #1f2937;
+  padding: 10px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 12px 0 30px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+}
+
+.editor-sidebar-header {
+  padding-bottom: 4px;
+  border-bottom: 1px solid #1f2937;
+}
+
+.editor-sidebar-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #9ca3af;
+}
+
+.editor-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-sidebar-nav-btn {
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid #1f2937;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: #020617;
+  color: #9ca3af;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 120ms ease-out,
+    color 120ms ease-out,
+    transform 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.editor-sidebar-nav-btn--active {
+  background: #22c55e;
+  color: #022c22;
+  border-color: #22c55e;
+  box-shadow: 0 8px 18px rgba(34, 197, 94, 0.5);
+  transform: translateY(-1px);
+}
+
+.editor-sidebar-content {
+  flex: 1;
+  margin-top: 4px;
+  padding: 8px 6px;
+  border-radius: 10px;
+  border: 1px dashed #1f2937;
+  background: rgba(15, 23, 42, 0.85);
+  overflow: auto;
+}
+
+.editor-sidebar-placeholder {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #9ca3af;
+}
+
+/* Onglets "File / Assets" façon Figma */
+.editor-tabs {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: #020617;
+  border: 1px solid #1f2937;
+}
+
+.editor-tab {
+  border-radius: 999px;
+  border: none;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.editor-tab--active {
+  background: #111827;
+  color: #e5e7eb;
+}
+
+/* Liste des bibliothèques (Assets root) */
+.assets-library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.assets-library-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 8px;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  background: #020617;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 120ms ease-out,
+    border-color 120ms ease-out,
+    box-shadow 120ms ease-out,
+    transform 120ms ease-out;
+}
+
+.assets-library-card:hover {
+  background: #030712;
+  border-color: #374151;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+  transform: translateY(-1px);
+}
+
+.assets-library-thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  background: #111827;
+}
+
+.assets-library-thumb--textures {
+  background-image:
+    linear-gradient(135deg, rgba(34, 197, 94, 0.7), rgba(56, 189, 248, 0.7)),
+    url("/textures/piketexture2.png");
+  background-size: cover;
+  background-position: center;
+}
+
+.assets-library-thumb--models {
+  background-image: radial-gradient(circle at 30% 0, #f97316 0, #0f172a 55%);
+}
+
+.assets-library-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assets-library-name {
+  font-size: 0.8rem;
+  color: #e5e7eb;
+}
+
+.assets-library-count {
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+.assets-back-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.assets-back-btn {
+  border-radius: 999px;
+  border: none;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  background: #111827;
+  color: #e5e7eb;
+  cursor: pointer;
+}
+
+.assets-section-title {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+/* Liste des textures dans la colonne gauche */
+.texture-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.texture-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #1f2937;
+  background: #020617;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 120ms ease-out,
+    border-color 120ms ease-out,
+    box-shadow 120ms ease-out,
+    transform 120ms ease-out;
+}
+
+.texture-item--active {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: #22c55e;
+  box-shadow: 0 8px 18px rgba(34, 197, 94, 0.45);
+  transform: translateY(-1px);
+}
+
+.texture-thumb {
+  width: 100%;
+  height: 48px;
+  border-radius: 6px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 1px #020617, 0 0 0 2px #111827;
+}
+
+.texture-thumb--pike {
+  background-image: url("/textures/piketexture2.png");
+}
+
+.texture-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.texture-name {
+  font-size: 0.8rem;
+  color: #e5e7eb;
+}
+
+.texture-tag {
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+/* Liste des modèles dans Assets > Modèles */
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.model-item {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #1f2937;
+  background: #020617;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.8rem;
+  color: #e5e7eb;
+  transition:
+    background 120ms ease-out,
+    border-color 120ms ease-out,
+    transform 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.model-item--active {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: #22c55e;
+  box-shadow: 0 8px 18px rgba(34, 197, 94, 0.45);
+  transform: translateY(-1px);
+}
+
+.model-name {
+  font-size: 0.8rem;
 }
 
 .app-title {

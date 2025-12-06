@@ -14,6 +14,8 @@ import { PlasticGradientMaterial } from "./PlasticGradientMaterial";
 
 function getModelPath(modelType) {
   switch (modelType) {
+    case "CollectionTest":
+      return "/models/CollectionTest.glb";
     case "Lure26":
       return "/models/Lure26.glb";
     case "Lure27":
@@ -44,6 +46,7 @@ function LureModel({
   maskType = "none",
   collectionType = null, // "Palette" | "Hoo_B" | null
   textureUrl = null,
+  paletteType = null, // ex: "Palette_H", "Palette_M" (depuis Palettes.glb)
 }) {
   const modelPath = getModelPath(modelType);
   const gltf = useGLTF(modelPath);
@@ -51,6 +54,8 @@ function LureModel({
   // Charger une texture (même si on ne l'utilise pas toujours) pour respecter les règles des hooks.
   const colorTexture = useTexture(textureUrl || "/textures/piketexture2.png");
   const hasTexture = !!textureUrl;
+  // Fichier commun contenant toutes les palettes disponibles
+  const palettesGltf = useGLTF("/Palettes/Correct_Palettes.glb");
 
   useEffect(() => {
     if (!scene) return;
@@ -498,6 +503,12 @@ function LureModel({
         }
 
         if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+          // Si une texture de couleur est active (ex: Pike), on l'applique
+          if (hasTexture && colorTexture) {
+            mat.map = colorTexture;
+            mat.needsUpdate = true;
+          }
+
           if (isPaletteLure) {
             // Aspect plastique brillant : moins métallique, un peu plus de roughness
             mat.roughness = 0.16;
@@ -520,6 +531,35 @@ function LureModel({
         }
       }
     });
+    // Attache dynamique des palettes externes (Palettes.glb) via un Empty "socket"
+    if (paletteType && palettesGltf?.scene && scene) {
+      const socketName = "PaletteSocket_Front";
+      const socket = scene.getObjectByName(socketName);
+
+      if (socket) {
+        // Supprimer les anciennes palettes ajoutées précédemment sur ce socket
+        socket.children
+          .slice()
+          .forEach((child) => {
+            if (child.userData?.isAttachedPalette) {
+              socket.remove(child);
+            }
+          });
+
+        const sourcePalette = palettesGltf.scene.getObjectByName(paletteType);
+        if (sourcePalette) {
+          const clone = sourcePalette.clone(true);
+          // Cloner aussi les matériaux pour éviter les effets de bord entre instances
+          clone.traverse((child) => {
+            if (child.isMesh && child.material) {
+              child.material = child.material.clone();
+            }
+          });
+          clone.userData = { ...(clone.userData || {}), isAttachedPalette: true };
+          socket.add(clone);
+        }
+      }
+    }
   }, [
     scene,
     color,
@@ -538,6 +578,8 @@ function LureModel({
     collectionType,
     colorTexture,
     hasTexture,
+    palettesGltf,
+    paletteType,
   ]);
 
   return <primitive object={scene} />;
@@ -627,6 +669,8 @@ useGLTF.preload("/models/Lure26.glb");
 useGLTF.preload("/models/Lure27.glb");
 useGLTF.preload("/models/Lure28.glb");
 useGLTF.preload("/models/Lure29.glb");
+useGLTF.preload("/models/CollectionTest.glb");
+useGLTF.preload("/Palettes/Correct_Palettes.glb");
 
 // ----------- Page principale : liste de cartes de leurres -----------
 
@@ -902,8 +946,14 @@ function CreateLurePage() {
   const [maskType, setMaskType] = useState("none"); // "none" | "pike" | "card"
   const [collectionType, setCollectionType] = useState("Palette"); // pour Lure25/26/27/28 : "Palette" | "Hoo_B"
   const [usePikeTexture, setUsePikeTexture] = useState(false);
+  const [paletteType, setPaletteType] = useState("Palette_H"); // pour CollectionTest + Palettes.glb
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  // Colonne gauche "à la Figma"
+  // - leftMainTab: "file" => leurs enregistrés, "assets" => bibliothèques (textures / modèles)
+  // - assetsView: "root" => liste des bibliothèques, ou "textures" / "models" pour le détail
+  const [leftMainTab, setLeftMainTab] = useState("file"); // "file" | "assets"
+  const [assetsView, setAssetsView] = useState("root"); // "root" | "textures" | "models"
   const glRef = useRef(null);
 
   const handleSubmit = async (e) => {
@@ -993,337 +1043,492 @@ function CreateLurePage() {
 
   return (
     <div className="app-root app-root--dark">
-      <div className="viewer-container">
-        <Canvas
-          className="three-canvas"
-          camera={{ position: [0, 0.5, 2.5], fov: 50 }}
-          gl={{ preserveDrawingBuffer: true }}
-          onCreated={({ gl }) => {
-            glRef.current = gl;
-          }}
-        >
-          <ambientLight intensity={0.3} />
-          <directionalLight position={[2, 5, 3]} intensity={1.8} />
-          <directionalLight position={[-2, -3, -2]} intensity={1.0} />
-          <pointLight position={[0, 2, 2]} intensity={0.9} />
-          <Environment preset="sunset" />
-          <LureModel
-            modelType={modelType}
-            color={color}
-            useGradient={
-              modelType === "Lure11" ||
-              modelType === "Lure12" ||
-              modelType === "Lure13" ||
-              modelType === "Lure14" ||
-              modelType === "Lure15" ||
-              modelType === "Lure16" ||
-              modelType === "Lure17" ||
-              modelType === "Lure18" ||
-              modelType === "Lure19" ||
-              modelType === "Lure20" ||
-              modelType === "Lure21" ||
-              modelType === "Lure22" ||
-              modelType === "Lure29"
-            }
-            gradientTop={gradientTop}
-            gradientMiddle={gradientMiddle}
-            gradientBottom={gradientBottom}
-            gradientSmoothness={gradientStrength / 100}
-            gradientCenter={gradientPosition / 100}
-            // On garde toujours un minimum de douceur pour que le bas reste visible,
-            // même quand le slider est à 0.
-            gradientSmoothness2={gradientStrength2 / 100}
-            gradientCenter2={gradientPosition2 / 100}
-            gradientTargetName={
-              modelType === "Lure12" ||
-              modelType === "Lure13" ||
-              modelType === "Lure14" ||
-              modelType === "Lure15" ||
-              modelType === "Lure16" ||
-              modelType === "Lure17" ||
-              modelType === "Lure18" ||
-              modelType === "Lure19" ||
-              modelType === "Lure20" ||
-              modelType === "Lure21" ||
-              modelType === "Lure22" ||
-              modelType === "Lure29"
-                ? "Cube"
-                : null
-            }
-            runnerType={runnerType}
-            maskType={maskType}
-            collectionType={
-              modelType === "Lure25" ||
-              modelType === "Lure26" ||
-              modelType === "Lure27" ||
-              modelType === "Lure28" ||
-              modelType === "Lure29"
-                ? collectionType
-                : null
-            }
-            textureUrl={usePikeTexture ? "/textures/piketexture2.png" : null}
-          />
-          <OrbitControls
-            enablePan={false}
-            enableZoom
-            target={[0, 0, 0]}
-          />
-        </Canvas>
-      </div>
-
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <div>
-            <h1 className="app-title">Nouveau leurre</h1>
+      <div className="editor-layout">
+        {/* Colonne gauche "à la Figma" */}
+        <aside className="editor-sidebar">
+          <div className="editor-sidebar-header">
+            <div className="editor-tabs">
+              <button
+                type="button"
+                className={`editor-tab${
+                  leftMainTab === "file" ? " editor-tab--active" : ""
+                }`}
+                onClick={() => {
+                  setLeftMainTab("file");
+                  setAssetsView("root");
+                }}
+              >
+                File
+              </button>
+              <button
+                type="button"
+                className={`editor-tab${
+                  leftMainTab === "assets" ? " editor-tab--active" : ""
+                }`}
+                onClick={() => {
+                  setLeftMainTab("assets");
+                  setAssetsView("root");
+                }}
+              >
+                Assets
+              </button>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {user ? (
-              <div className="user-chip">
-                <span className="user-email">{user.email}</span>
+          <div className="editor-sidebar-content">
+            {leftMainTab === "file" && (
+              <div>
+                <h2 className="editor-sidebar-title">Mes leurres</h2>
+                <p className="editor-sidebar-placeholder">
+                  Ici, tu verras la liste de tes leurres sauvegardés (comme
+                  l&apos;onglet &quot;File&quot; de Figma). On pourra y
+                  afficher les projets locaux ou ceux venant de Supabase.
+                </p>
+              </div>
+            )}
+
+            {leftMainTab === "assets" && assetsView === "root" && (
+              <div>
+                <h2 className="editor-sidebar-title">Libraries</h2>
+                <div className="assets-library-list">
+                  <button
+                    type="button"
+                    className="assets-library-card"
+                    onClick={() => setAssetsView("textures")}
+                  >
+                    <div className="assets-library-thumb assets-library-thumb--textures" />
+                    <div className="assets-library-meta">
+                      <span className="assets-library-name">Textures</span>
+                      <span className="assets-library-count">
+                        1 texture (Pike) pour commencer
+                      </span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="assets-library-card"
+                    onClick={() => setAssetsView("models")}
+                  >
+                    <div className="assets-library-thumb assets-library-thumb--models" />
+                    <div className="assets-library-meta">
+                      <span className="assets-library-name">
+                        Modèles de leurres
+                      </span>
+                      <span className="assets-library-count">
+                        Choisis la forme de ton leurre
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {leftMainTab === "assets" && assetsView === "textures" && (
+              <div>
+                <div className="assets-back-row">
+                  <button
+                    type="button"
+                    className="assets-back-btn"
+                    onClick={() => setAssetsView("root")}
+                  >
+                    ← Assets
+                  </button>
+                  <span className="assets-section-title">Textures</span>
+                </div>
+                <div className="texture-list">
+                  <button
+                    type="button"
+                    className={`texture-item${
+                      usePikeTexture ? " texture-item--active" : ""
+                    }`}
+                    onClick={() => setUsePikeTexture((v) => !v)}
+                  >
+                    <div className="texture-thumb texture-thumb--pike" />
+                    <div className="texture-meta">
+                      <span className="texture-name">Texture Pike</span>
+                      <span className="texture-tag">
+                        {usePikeTexture
+                          ? "Utilisée sur le leurre"
+                          : "Cliquer pour appliquer"}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {leftMainTab === "assets" && assetsView === "models" && (
+              <div>
+                <div className="assets-back-row">
+                  <button
+                    type="button"
+                    className="assets-back-btn"
+                    onClick={() => setAssetsView("root")}
+                  >
+                    ← Assets
+                  </button>
+                  <span className="assets-section-title">Modèles</span>
+                </div>
+                <div className="model-list">
+                  {["Lure26", "Lure27", "Lure28", "Lure29", "CollectionTest"].map(
+                    (type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className={`model-item${
+                          modelType === type ? " model-item--active" : ""
+                        }`}
+                        onClick={() => setModelType(type)}
+                      >
+                        <span className="model-name">{type}</span>
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        <div className="viewer-container">
+          <Canvas
+            className="three-canvas"
+            camera={{ position: [0, 0.5, 2.5], fov: 50 }}
+            gl={{ preserveDrawingBuffer: true }}
+            onCreated={({ gl }) => {
+              glRef.current = gl;
+            }}
+          >
+            <ambientLight intensity={0.3} />
+            <directionalLight position={[2, 5, 3]} intensity={1.8} />
+            <directionalLight position={[-2, -3, -2]} intensity={1.0} />
+            <pointLight position={[0, 2, 2]} intensity={0.9} />
+            <Environment preset="sunset" />
+            <LureModel
+              modelType={modelType}
+              color={color}
+              useGradient={
+                modelType === "Lure11" ||
+                modelType === "Lure12" ||
+                modelType === "Lure13" ||
+                modelType === "Lure14" ||
+                modelType === "Lure15" ||
+                modelType === "Lure16" ||
+                modelType === "Lure17" ||
+                modelType === "Lure18" ||
+                modelType === "Lure19" ||
+                modelType === "Lure20" ||
+                modelType === "Lure21" ||
+                modelType === "Lure22" ||
+                modelType === "Lure29"
+              }
+              gradientTop={gradientTop}
+              gradientMiddle={gradientMiddle}
+              gradientBottom={gradientBottom}
+              gradientSmoothness={gradientStrength / 100}
+              gradientCenter={gradientPosition / 100}
+              // On garde toujours un minimum de douceur pour que le bas reste visible,
+              // même quand le slider est à 0.
+              gradientSmoothness2={gradientStrength2 / 100}
+              gradientCenter2={gradientPosition2 / 100}
+              gradientTargetName={
+                modelType === "Lure12" ||
+                modelType === "Lure13" ||
+                modelType === "Lure14" ||
+                modelType === "Lure15" ||
+                modelType === "Lure16" ||
+                modelType === "Lure17" ||
+                modelType === "Lure18" ||
+                modelType === "Lure19" ||
+                modelType === "Lure20" ||
+                modelType === "Lure21" ||
+                modelType === "Lure22" ||
+                modelType === "Lure29"
+                  ? "Cube"
+                  : null
+              }
+              runnerType={runnerType}
+              maskType={maskType}
+              collectionType={
+                modelType === "Lure25" ||
+                modelType === "Lure26" ||
+                modelType === "Lure27" ||
+                modelType === "Lure28" ||
+                modelType === "Lure29"
+                  ? collectionType
+                  : null
+              }
+              textureUrl={usePikeTexture ? "/textures/piketexture2.png" : null}
+              paletteType={modelType === "CollectionTest" ? paletteType : null}
+            />
+            <OrbitControls
+              enablePan={false}
+              enableZoom
+              target={[0, 0, 0]}
+            />
+          </Canvas>
+        </div>
+
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <div>
+              <h1 className="app-title">Nouveau leurre</h1>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {user ? (
+                <div className="user-chip">
+                  <span className="user-email">{user.email}</span>
+                  <button
+                    type="button"
+                    className="user-logout-btn"
+                    onClick={() => supabase.auth.signOut()}
+                  >
+                    Déconnexion
+                  </button>
+                </div>
+              ) : (
                 <button
                   type="button"
-                  className="user-logout-btn"
-                  onClick={() => supabase.auth.signOut()}
+                  className="secondary-btn"
+                  onClick={() => navigate("/auth")}
                 >
-                  Déconnexion
+                  Se connecter
                 </button>
-              </div>
-            ) : (
+              )}
               <button
                 type="button"
                 className="secondary-btn"
-                onClick={() => navigate("/auth")}
+                onClick={() => navigate("/")}
               >
-                Se connecter
+                Retour à la liste
               </button>
-            )}
-            <button
-              type="button"
-              className="secondary-btn"
-              onClick={() => navigate("/")}
-            >
-              Retour à la liste
-            </button>
+            </div>
           </div>
-        </div>
 
-        <form onSubmit={handleSubmit}>
-          <section className="panel" style={{ marginBottom: 12 }}>
-            <h2 className="panel-title">Type de leurre</h2>
-            <div className="color-picker-row">
-              <span>Modèle</span>
-              <select
-                value={modelType}
-                onChange={(e) => setModelType(e.target.value)}
-                style={{ flex: 1, padding: "6px 8px" }}
-              >
-                {["Lure26", "Lure27", "Lure28", "Lure29"].map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </section>
-
-          <section className="panel" style={{ marginBottom: 12 }}>
-            <h2 className="panel-title">Type de nage</h2>
-            <div className="home-type-filters">
-              {["SlallowRunner", "MediumRunner", "DeepRunner"].map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  className={`home-type-filter-btn${
-                    runnerType === type ? " home-type-filter-btn--active" : ""
-                  }`}
-                  onClick={() => setRunnerType(type)}
+          <form onSubmit={handleSubmit}>
+            <section className="panel" style={{ marginBottom: 12 }}>
+              <h2 className="panel-title">Type de leurre</h2>
+              <div className="color-picker-row">
+                <span>Modèle</span>
+                <select
+                  value={modelType}
+                  onChange={(e) => setModelType(e.target.value)}
+                  style={{ flex: 1, padding: "6px 8px" }}
                 >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </section>
+                  {["Lure26", "Lure27", "Lure28", "Lure29", "CollectionTest"].map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </section>
 
-          {(modelType === "Lure25" ||
-            modelType === "Lure26" ||
-            modelType === "Lure27" ||
-            modelType === "Lure28" ||
-            modelType === "Lure29") && (
-            <section className="panel">
-              <h2 className="panel-title">Collection (Palette / Hoo_B)</h2>
+            <section className="panel" style={{ marginBottom: 12 }}>
+              <h2 className="panel-title">Type de nage</h2>
               <div className="home-type-filters">
-                {[
-                  { key: "Palette", label: "Palette" },
-                  { key: "Hoo_B", label: "Hoo_B" },
-                ].map((opt) => (
+                {["SlallowRunner", "MediumRunner", "DeepRunner"].map((type) => (
                   <button
-                    key={opt.key}
+                    key={type}
                     type="button"
                     className={`home-type-filter-btn${
-                      collectionType === opt.key
-                        ? " home-type-filter-btn--active"
-                        : ""
+                      runnerType === type ? " home-type-filter-btn--active" : ""
                     }`}
-                    onClick={() => setCollectionType(opt.key)}
+                    onClick={() => setRunnerType(type)}
                   >
-                    {opt.label}
+                    {type}
                   </button>
                 ))}
               </div>
             </section>
-          )}
 
-          <section className="panel">
-            <h2 className="panel-title">Couleur du leurre</h2>
-            {modelType === "Lure11" ||
-            modelType === "Lure12" ||
-            modelType === "Lure13" ||
-            modelType === "Lure14" ||
-            modelType === "Lure15" ||
-            modelType === "Lure16" ||
-            modelType === "Lure17" ||
-            modelType === "Lure18" ||
-            modelType === "Lure19" ||
-            modelType === "Lure20" ||
-            modelType === "Lure21" ||
-            modelType === "Lure22" ||
-            modelType === "Lure29" ? (
-              <>
-                <div className="color-picker-row">
-                  <span>Couleur haut</span>
-                  <input
-                    type="color"
-                    value={gradientTop}
-                    onChange={(e) => setGradientTop(e.target.value)}
-                  />
+            {(modelType === "Lure25" ||
+              modelType === "Lure26" ||
+              modelType === "Lure27" ||
+              modelType === "Lure28" ||
+              modelType === "Lure29") && (
+              <section className="panel">
+                <h2 className="panel-title">Collection (Palette / Hoo_B)</h2>
+                <div className="home-type-filters">
+                  {[
+                    { key: "Palette", label: "Palette" },
+                    { key: "Hoo_B", label: "Hoo_B" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      className={`home-type-filter-btn${
+                        collectionType === opt.key
+                          ? " home-type-filter-btn--active"
+                          : ""
+                      }`}
+                      onClick={() => setCollectionType(opt.key)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="color-picker-row">
-                  <span>Couleur milieu</span>
-                  <input
-                    type="color"
-                    value={gradientMiddle}
-                    onChange={(e) => setGradientMiddle(e.target.value)}
-                  />
-                </div>
-                <div className="color-picker-row">
-                  <span>Couleur bas</span>
-                  <input
-                    type="color"
-                    value={gradientBottom}
-                    onChange={(e) => setGradientBottom(e.target.value)}
-                  />
-                </div>
-                <div className="color-picker-row" style={{ marginTop: 12 }}>
-                  <span>Degré dégradé haut</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={gradientStrength}
-                    onChange={(e) => setGradientStrength(Number(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ width: 40, textAlign: "right" }}>
-                    {gradientStrength}
-                  </span>
-                </div>
-                <div className="color-picker-row" style={{ marginTop: 8 }}>
-                  <span>Degré dégradé bas</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={gradientStrength2}
-                    onChange={(e) => setGradientStrength2(Number(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ width: 40, textAlign: "right" }}>
-                    {gradientStrength2}
-                  </span>
-                </div>
-                <div className="color-picker-row" style={{ marginTop: 8 }}>
-                  <span>Positions B / H</span>
-                  <div style={{ flex: 1 }}>
-                    <DualPositionSlider
-                      valueLow={gradientPosition2}
-                      valueHigh={gradientPosition}
-                      onChange={(low, high) => {
-                        setGradientPosition2(low);
-                        setGradientPosition(high);
-                      }}
+              </section>
+            )}
+
+            <section className="panel">
+              <h2 className="panel-title">Couleur du leurre</h2>
+              {modelType === "Lure11" ||
+              modelType === "Lure12" ||
+              modelType === "Lure13" ||
+              modelType === "Lure14" ||
+              modelType === "Lure15" ||
+              modelType === "Lure16" ||
+              modelType === "Lure17" ||
+              modelType === "Lure18" ||
+              modelType === "Lure19" ||
+              modelType === "Lure20" ||
+              modelType === "Lure21" ||
+              modelType === "Lure22" ||
+              modelType === "Lure29" ? (
+                <>
+                  <div className="color-picker-row">
+                    <span>Couleur haut</span>
+                    <input
+                      type="color"
+                      value={gradientTop}
+                      onChange={(e) => setGradientTop(e.target.value)}
                     />
                   </div>
-                </div>
-                <div className="color-picker-row" style={{ marginTop: 8 }}>
-                  <span>Texture Pike</span>
-                  <button
-                    type="button"
-                    className={`home-type-filter-btn${
-                      usePikeTexture ? " home-type-filter-btn--active" : ""
-                    }`}
-                    onClick={() => setUsePikeTexture((v) => !v)}
-                  >
-                    {usePikeTexture ? "Activée" : "Désactivée"}
-                  </button>
-                </div>
-                {(modelType === "Lure17" ||
-                  modelType === "Lure18" ||
-                  modelType === "Lure19" ||
-                  modelType === "Lure20" ||
-                  modelType === "Lure21" ||
-                  modelType === "Lure22") && (
+                  <div className="color-picker-row">
+                    <span>Couleur milieu</span>
+                    <input
+                      type="color"
+                      value={gradientMiddle}
+                      onChange={(e) => setGradientMiddle(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row">
+                    <span>Couleur bas</span>
+                    <input
+                      type="color"
+                      value={gradientBottom}
+                      onChange={(e) => setGradientBottom(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 12 }}>
+                    <span>Degré dégradé haut</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={gradientStrength}
+                      onChange={(e) => setGradientStrength(Number(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ width: 40, textAlign: "right" }}>
+                      {gradientStrength}
+                    </span>
+                  </div>
                   <div className="color-picker-row" style={{ marginTop: 8 }}>
-                    <span>Mask</span>
-                    <div className="home-type-filters" style={{ flex: 1 }}>
-                      {[
-                        { key: "none", label: "Aucun" },
-                        { key: "pike", label: "Pike" },
-                        { key: "card", label: "Points" },
-                      ].map((opt) => (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          className={`home-type-filter-btn${
-                            maskType === opt.key ? " home-type-filter-btn--active" : ""
-                          }`}
-                          onClick={() => setMaskType(opt.key)}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                    <span>Degré dégradé bas</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={gradientStrength2}
+                      onChange={(e) => setGradientStrength2(Number(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ width: 40, textAlign: "right" }}>
+                      {gradientStrength2}
+                    </span>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Positions B / H</span>
+                    <div style={{ flex: 1 }}>
+                      <DualPositionSlider
+                        valueLow={gradientPosition2}
+                        valueHigh={gradientPosition}
+                        onChange={(low, high) => {
+                          setGradientPosition2(low);
+                          setGradientPosition(high);
+                        }}
+                      />
                     </div>
                   </div>
-                )}
-              </>
-            ) : (
-              <div className="color-picker-row">
-                <span>Couleur</span>
-                <input
-                  type="color"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                />
-              </div>
-            )}
-            {error && (
-              <p className="lure-list-message lure-list-message--error">
-                {error}
-              </p>
-            )}
+                  {(modelType === "Lure17" ||
+                    modelType === "Lure18" ||
+                    modelType === "Lure19" ||
+                    modelType === "Lure20" ||
+                    modelType === "Lure21" ||
+                    modelType === "Lure22") && (
+                    <div className="color-picker-row" style={{ marginTop: 8 }}>
+                      <span>Mask</span>
+                      <div className="home-type-filters" style={{ flex: 1 }}>
+                        {[
+                          { key: "none", label: "Aucun" },
+                          { key: "pike", label: "Pike" },
+                          { key: "card", label: "Points" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            className={`home-type-filter-btn${
+                              maskType === opt.key ? " home-type-filter-btn--active" : ""
+                            }`}
+                            onClick={() => setMaskType(opt.key)}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="color-picker-row">
+                  <span>Couleur</span>
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                  />
+                </div>
+              )}
+              {modelType === "CollectionTest" && (
+                <div className="color-picker-row" style={{ marginTop: 8 }}>
+                  <span>Type de palette</span>
+                  <div className="home-type-filters" style={{ flex: 1 }}>
+                    {["Palette_H", "Palette_M"].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className={`home-type-filter-btn${
+                          paletteType === type ? " home-type-filter-btn--active" : ""
+                        }`}
+                        onClick={() => setPaletteType(type)}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {error && (
+                <p className="lure-list-message lure-list-message--error">
+                  {error}
+                </p>
+              )}
 
-            <button
-              type="submit"
-              className="primary-btn"
-              disabled={creating}
-              style={{ marginTop: 12, width: "100%" }}
-            >
-              {creating ? "Création..." : "Sauvegarder"}
-            </button>
-          </section>
-        </form>
-      </aside>
+              <button
+                type="submit"
+                className="primary-btn"
+                disabled={creating}
+                style={{ marginTop: 12, width: "100%" }}
+              >
+                {creating ? "Création..." : "Sauvegarder"}
+              </button>
+            </section>
+          </form>
+        </aside>
+      </div>
     </div>
   );
 }
