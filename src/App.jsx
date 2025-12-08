@@ -9,6 +9,7 @@ import { useAuth } from "./AuthContext";
 import AuthPage from "./AuthPage.jsx";
 import { GradientMaterial } from "./GradientMaterial";
 import { PlasticGradientMaterial } from "./PlasticGradientMaterial";
+import { attachTripleToLure } from "./tripleAttachment";
 
 // ----------- Utilitaires modèle 3D -----------
 
@@ -16,6 +17,8 @@ function getModelPath(modelType) {
   switch (modelType) {
     case "CollectionTest":
       return "/models/CollectionTest.glb";
+    case "Lurepret":
+      return "/models/Lurepret.glb";
     case "Lure26":
       return "/models/Lure26.glb";
     case "Lure27":
@@ -47,6 +50,7 @@ function LureModel({
   collectionType = null, // "Palette" | "Hoo_B" | null
   textureUrl = null,
   paletteType = null, // ex: "Palette_H", "Palette_M" (depuis Palettes.glb)
+  tripleSize = null, // ex: "Triple_#1", "Triple_#2", "Triple_#4", "Triple_#6" (depuis Triple_Asset.glb)
 }) {
   const modelPath = getModelPath(modelType);
   const gltf = useGLTF(modelPath);
@@ -56,6 +60,8 @@ function LureModel({
   const hasTexture = !!textureUrl;
   // Fichier commun contenant toutes les palettes disponibles
   const palettesGltf = useGLTF("/Palettes/Correct_Palettes.glb");
+  // Accessoire Triple (N_Triple_Asset.glb) pour certains leurres (plusieurs tailles)
+  const tripleGltf = useGLTF("/Triple/N_Triple_Asset.glb");
 
   useEffect(() => {
     if (!scene) return;
@@ -560,6 +566,11 @@ function LureModel({
         }
       }
     }
+
+    // Attache dynamique du Triple (N_Triple_Asset.glb) sur Lurepret via les repères.
+    if (modelType === "Lurepret") {
+      attachTripleToLure({ scene, tripleGltf, tripleSize });
+    }
   }, [
     scene,
     color,
@@ -580,6 +591,8 @@ function LureModel({
     hasTexture,
     palettesGltf,
     paletteType,
+    tripleGltf,
+    tripleSize,
   ]);
 
   return <primitive object={scene} />;
@@ -669,8 +682,10 @@ useGLTF.preload("/models/Lure26.glb");
 useGLTF.preload("/models/Lure27.glb");
 useGLTF.preload("/models/Lure28.glb");
 useGLTF.preload("/models/Lure29.glb");
+useGLTF.preload("/models/Lurepret.glb");
 useGLTF.preload("/models/CollectionTest.glb");
 useGLTF.preload("/Palettes/Correct_Palettes.glb");
+useGLTF.preload("/Triple/N_Triple_Asset.glb");
 
 // ----------- Page principale : liste de cartes de leurres -----------
 
@@ -901,6 +916,8 @@ function HomePage() {
                 <LureModel
                   modelType={previewLure.model_type}
                   color={previewLure.color || "#ffffff"}
+                  // Pour l'instant, on n'a pas encore de sauvegarde du type de triple,
+                  // donc on utilise la valeur par défaut définie dans LureModel.
                 />
                 <OrbitControls
                   enablePan={false}
@@ -947,6 +964,7 @@ function CreateLurePage() {
   const [collectionType, setCollectionType] = useState("Palette"); // pour Lure25/26/27/28 : "Palette" | "Hoo_B"
   const [usePikeTexture, setUsePikeTexture] = useState(false);
   const [paletteType, setPaletteType] = useState("Palette_H"); // pour CollectionTest + Palettes.glb
+  const [tripleSize, setTripleSize] = useState("Triple_#4"); // taille du triple à attacher sur Lurepret
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   // Colonne gauche "à la Figma"
@@ -1169,7 +1187,7 @@ function CreateLurePage() {
                   <span className="assets-section-title">Modèles</span>
                 </div>
                 <div className="model-list">
-                  {["Lure26", "Lure27", "Lure28", "Lure29", "CollectionTest"].map(
+                  {["Lure26", "Lure27", "Lure28", "Lure29", "Lurepret", "CollectionTest"].map(
                     (type) => (
                       <button
                         key={type}
@@ -1259,6 +1277,7 @@ function CreateLurePage() {
               }
               textureUrl={usePikeTexture ? "/textures/piketexture2.png" : null}
               paletteType={modelType === "CollectionTest" ? paletteType : null}
+              tripleSize={modelType === "Lurepret" ? tripleSize : null}
             />
             <OrbitControls
               enablePan={false}
@@ -1314,11 +1333,13 @@ function CreateLurePage() {
                   onChange={(e) => setModelType(e.target.value)}
                   style={{ flex: 1, padding: "6px 8px" }}
                 >
-                  {["Lure26", "Lure27", "Lure28", "Lure29", "CollectionTest"].map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
+                  {["Lure26", "Lure27", "Lure28", "Lure29", "Lurepret", "CollectionTest"].map(
+                    (type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
             </section>
@@ -1362,6 +1383,31 @@ function CreateLurePage() {
                           : ""
                       }`}
                       onClick={() => setCollectionType(opt.key)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {modelType === "Lurepret" && (
+              <section className="panel">
+                <h2 className="panel-title">Triple (taille)</h2>
+                <div className="home-type-filters">
+                  {[
+                    { key: "Triple_#1", label: "#1" },
+                    { key: "Triple_#2", label: "#2" },
+                    { key: "Triple_#4", label: "#4" },
+                    { key: "Triple_#6", label: "#6" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      className={`home-type-filter-btn${
+                        tripleSize === opt.key ? " home-type-filter-btn--active" : ""
+                      }`}
+                      onClick={() => setTripleSize(opt.key)}
                     >
                       {opt.label}
                     </button>
