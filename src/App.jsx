@@ -19,6 +19,14 @@ function getModelPath(modelType) {
       return "/models/CollectionTest.glb";
     case "Lurepret":
       return "/models/Lurepret.glb";
+    case "LurePret2":
+      return "/models/LurePret2.glb";
+    case "LurePret3":
+      return "/models/LurePret3.glb";
+    case "LurePret4":
+      return "/models/LurePret4.glb";
+    case "LurePret5":
+      return "/models/LurePret5.glb";
     case "Lure26":
       return "/models/Lure26.glb";
     case "Lure27":
@@ -50,7 +58,9 @@ function LureModel({
   collectionType = null, // "Palette" | "Hoo_B" | null
   textureUrl = null,
   paletteType = null, // ex: "Palette_H", "Palette_M" (depuis Palettes.glb)
-  tripleSize = null, // ex: "Triple_#1", "Triple_#2", "Triple_#4", "Triple_#6" (depuis Triple_Asset.glb)
+  tripleSize = null, // ex: "Triple_#1", "Triple_#2", "Triple_#4", "Triple_#6" (depuis N_Triple_Asset.glb)
+  frontTripleSize = null, // pour LurePret2/LurePret3/LurePret4 : taille du triple à l'avant
+  backTripleSize = null, // pour LurePret2/LurePret3/LurePret4 : taille du triple à l'arrière
 }) {
   const modelPath = getModelPath(modelType);
   const gltf = useGLTF(modelPath);
@@ -64,6 +74,10 @@ function LureModel({
   const tripleGltf = useGLTF("/Triple/N_Triple_Asset.glb");
 
   useEffect(() => {
+    // DEBUG: vérifier que le bon modèle est bien utilisé
+    // eslint-disable-next-line no-console
+    console.log("LureModel debug", { modelType, modelPath });
+
     if (!scene) return;
 
     // DEBUG (désactivé) : affichage des textures GLTF
@@ -92,6 +106,30 @@ function LureModel({
       scene.userData.gradientHeightMax = normalizedBox.max.y;
 
       scene.userData.normalized = true;
+    }
+
+    // Pour certains modèles (Lurepret / LurePret2 / 3 / 4 / 5), on force un
+    // recalcul des normales côté Three.js pour éviter l'effet "facettes"
+    // même si le GLB n'a pas été exporté avec le bon lissage.
+    if (
+      modelType === "Lurepret" ||
+      modelType === "LurePret2" ||
+      modelType === "LurePret3" ||
+      modelType === "LurePret4" ||
+      modelType === "LurePret5"
+    ) {
+      scene.traverse((child) => {
+        if (!child.isMesh || !child.geometry) return;
+        // Recalculer des normales lissées
+        if (child.geometry && child.geometry.computeVertexNormals) {
+          child.geometry.computeVertexNormals();
+        }
+        // S'assurer que le matériau n'est pas en flat shading
+        if (child.material) {
+          child.material.flatShading = false;
+          child.material.needsUpdate = true;
+        }
+      });
     }
 
     // DEBUG: loguer une fois la liste des meshes et matériaux du modèle
@@ -567,9 +605,47 @@ function LureModel({
       }
     }
 
-    // Attache dynamique du Triple (N_Triple_Asset.glb) sur Lurepret via les repères.
+    // Attache dynamique du Triple (N_Triple_Asset.glb) via les repères.
     if (modelType === "Lurepret") {
-      attachTripleToLure({ scene, tripleGltf, tripleSize });
+      if (tripleSize) {
+        attachTripleToLure({ scene, tripleGltf, tripleSize });
+      }
+    } else if (
+      modelType === "LurePret2" ||
+      modelType === "LurePret3" ||
+      modelType === "LurePret4" ||
+      modelType === "LurePret5"
+    ) {
+      // Nettoyer les éventuels triples présents sur les deux points d'attache
+      ["Attach_Down_add", "Attach_Back_Add"].forEach((name) => {
+        const sock = scene.getObjectByName(name);
+        if (sock) {
+          sock.children
+            .slice()
+            .forEach((child) => {
+              if (child.userData?.isAttachedTriple) {
+                sock.remove(child);
+              }
+            });
+        }
+      });
+
+      if (frontTripleSize) {
+        attachTripleToLure({
+          scene,
+          tripleGltf,
+          tripleSize: frontTripleSize,
+          socketName: "Attach_Down_add",
+        });
+      }
+      if (backTripleSize) {
+        attachTripleToLure({
+          scene,
+          tripleGltf,
+          tripleSize: backTripleSize,
+          socketName: "Attach_Back_Add",
+        });
+      }
     }
   }, [
     scene,
@@ -593,6 +669,8 @@ function LureModel({
     paletteType,
     tripleGltf,
     tripleSize,
+    frontTripleSize,
+    backTripleSize,
   ]);
 
   return <primitive object={scene} />;
@@ -683,6 +761,10 @@ useGLTF.preload("/models/Lure27.glb");
 useGLTF.preload("/models/Lure28.glb");
 useGLTF.preload("/models/Lure29.glb");
 useGLTF.preload("/models/Lurepret.glb");
+useGLTF.preload("/models/LurePret2.glb");
+useGLTF.preload("/models/LurePret3.glb");
+useGLTF.preload("/models/LurePret4.glb");
+useGLTF.preload("/models/LurePret5.glb");
 useGLTF.preload("/models/CollectionTest.glb");
 useGLTF.preload("/Palettes/Correct_Palettes.glb");
 useGLTF.preload("/Triple/N_Triple_Asset.glb");
@@ -965,6 +1047,10 @@ function CreateLurePage() {
   const [usePikeTexture, setUsePikeTexture] = useState(false);
   const [paletteType, setPaletteType] = useState("Palette_H"); // pour CollectionTest + Palettes.glb
   const [tripleSize, setTripleSize] = useState("Triple_#4"); // taille du triple à attacher sur Lurepret
+  // Pour LurePret2 : tailles indépendantes pour l'attache avant / arrière.
+  // null = aucun triple pour cette attache.
+  const [frontTripleSize, setFrontTripleSize] = useState(null);
+  const [backTripleSize, setBackTripleSize] = useState(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   // Colonne gauche "à la Figma"
@@ -1187,7 +1273,18 @@ function CreateLurePage() {
                   <span className="assets-section-title">Modèles</span>
                 </div>
                 <div className="model-list">
-                  {["Lure26", "Lure27", "Lure28", "Lure29", "Lurepret", "CollectionTest"].map(
+                  {[
+                    "Lure26",
+                    "Lure27",
+                    "Lure28",
+                    "Lure29",
+                    "Lurepret",
+                    "LurePret2",
+                    "LurePret3",
+                    "LurePret4",
+                    "LurePret5",
+                    "CollectionTest",
+                  ].map(
                     (type) => (
                       <button
                         key={type}
@@ -1278,6 +1375,22 @@ function CreateLurePage() {
               textureUrl={usePikeTexture ? "/textures/piketexture2.png" : null}
               paletteType={modelType === "CollectionTest" ? paletteType : null}
               tripleSize={modelType === "Lurepret" ? tripleSize : null}
+              frontTripleSize={
+                modelType === "LurePret2" ||
+                modelType === "LurePret3" ||
+                modelType === "LurePret4" ||
+                modelType === "LurePret5"
+                  ? frontTripleSize
+                  : null
+              }
+              backTripleSize={
+                modelType === "LurePret2" ||
+                modelType === "LurePret3" ||
+                modelType === "LurePret4" ||
+                modelType === "LurePret5"
+                  ? backTripleSize
+                  : null
+              }
             />
             <OrbitControls
               enablePan={false}
@@ -1333,7 +1446,18 @@ function CreateLurePage() {
                   onChange={(e) => setModelType(e.target.value)}
                   style={{ flex: 1, padding: "6px 8px" }}
                 >
-                  {["Lure26", "Lure27", "Lure28", "Lure29", "Lurepret", "CollectionTest"].map(
+                  {[
+                    "Lure26",
+                    "Lure27",
+                    "Lure28",
+                    "Lure29",
+                    "Lurepret",
+                    "LurePret2",
+                    "LurePret3",
+                    "LurePret4",
+                    "LurePret5",
+                    "CollectionTest",
+                  ].map(
                     (type) => (
                       <option key={type} value={type}>
                         {type}
@@ -1408,6 +1532,74 @@ function CreateLurePage() {
                         tripleSize === opt.key ? " home-type-filter-btn--active" : ""
                       }`}
                       onClick={() => setTripleSize(opt.key)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {(modelType === "LurePret2" ||
+              modelType === "LurePret3" ||
+              modelType === "LurePret4" ||
+              modelType === "LurePret5") && (
+              <section className="panel">
+                <h2 className="panel-title">Triple devant</h2>
+                <div className="home-type-filters" style={{ marginBottom: 8 }}>
+                  {[
+                    { key: null, label: "Aucun" },
+                    { key: "Triple_#1", label: "#1" },
+                    { key: "Triple_#2", label: "#2" },
+                    { key: "Triple_#4", label: "#4" },
+                    { key: "Triple_#6", label: "#6" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      className={`home-type-filter-btn${
+                        frontTripleSize === opt.key ? " home-type-filter-btn--active" : ""
+                      }`}
+                      onClick={() =>
+                        setFrontTripleSize((current) =>
+                          current === opt.key ? null : opt.key,
+                        )
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <h2 className="panel-title" style={{ marginTop: 12 }}>
+                  Triple derrière
+                </h2>
+                <div className="home-type-filters">
+                  <button
+                    type="button"
+                    className={`home-type-filter-btn${
+                      backTripleSize === null ? " home-type-filter-btn--active" : ""
+                    }`}
+                    onClick={() => setBackTripleSize(null)}
+                  >
+                    Aucun
+                  </button>
+                  {[
+                    { key: "Triple_#1", label: "#1" },
+                    { key: "Triple_#2", label: "#2" },
+                    { key: "Triple_#4", label: "#4" },
+                    { key: "Triple_#6", label: "#6" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      className={`home-type-filter-btn${
+                        backTripleSize === opt.key ? " home-type-filter-btn--active" : ""
+                      }`}
+                      onClick={() =>
+                        setBackTripleSize((current) =>
+                          current === opt.key ? null : opt.key,
+                        )
+                      }
                     >
                       {opt.label}
                     </button>

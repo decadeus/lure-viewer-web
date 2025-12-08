@@ -16,12 +16,16 @@ import * as THREE from "three";
  * - garde visibles UNIQUEMENT les 3 meshes (2 Torus + 1 Triple) les plus proches
  *   de cet Empty,
  * - recentre le groupe sur cet Empty,
- * - et l'accroche sur "Attach_Down_add" du leurre.
+ * - et l'accroche sur le socket demandé du leurre (par défaut "Attach_Down_add").
  */
-export function attachTripleToLure({ scene, tripleGltf, tripleSize }) {
+export function attachTripleToLure({
+  scene,
+  tripleGltf,
+  tripleSize,
+  socketName = "Attach_Down_add",
+}) {
   if (!scene || !tripleGltf?.scene) return;
 
-  const socketName = "Attach_Down_add";
   const socket = scene.getObjectByName(socketName);
   if (!socket) return;
 
