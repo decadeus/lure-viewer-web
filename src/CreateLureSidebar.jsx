@@ -116,6 +116,10 @@ export function CreateLureSidebar({
   setColor,
   paletteType,
   setPaletteType,
+  selectedTexture,
+  setSelectedTexture,
+  textureRotation,
+  setTextureRotation,
   error,
   creating,
   onSubmit,
@@ -233,6 +237,55 @@ export function CreateLureSidebar({
             setBackTripleSize={setBackTripleSize}
           />
         )}
+
+        {/* Panneau textures (choix + angle) */}
+        <section className="panel">
+          <h2 className="panel-title">Texture Pike</h2>
+          <div className="texture-list">
+            {[
+              { key: "/textures/Pike-002.png", name: "Pike 1" },
+              { key: "/textures/Pike_003.png", name: "Pike 2" },
+            ].map((tex) => (
+              <button
+                key={tex.key}
+                type="button"
+                className={`texture-item${
+                  selectedTexture === tex.key ? " texture-item--active" : ""
+                }`}
+                onClick={() =>
+                  setSelectedTexture((current) =>
+                    current === tex.key ? null : tex.key,
+                  )
+                }
+              >
+                <div className="texture-thumb texture-thumb--pike" />
+                <div className="texture-meta">
+                  <span className="texture-name">{tex.name}</span>
+                  <span className="texture-tag">
+                    {selectedTexture === tex.key
+                      ? "Utilisée sur le leurre"
+                      : "Cliquer pour appliquer"}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="color-picker-row" style={{ marginTop: 12 }}>
+            <span>Angle texture</span>
+            <input
+              type="range"
+              min={-180}
+              max={180}
+              step={1}
+              value={textureRotation}
+              onChange={(e) => setTextureRotation(Number(e.target.value))}
+              style={{ flex: 1 }}
+            />
+            <span style={{ width: 48, textAlign: "right" }}>
+              {textureRotation}°
+            </span>
+          </div>
+        </section>
 
         <section className="panel">
           <h2 className="panel-title">Couleur du leurre</h2>

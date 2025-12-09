@@ -26,7 +26,7 @@ function getModelPath(modelType) {
 }
 
 // Génère des UV simples pour le mesh UNIQUEMENT s'il n'en a pas déjà.
-// (On ne veut surtout pas écraser les UV exportées depuis Blender.)
+// (On ne veut surtout pas écraser les UV exportées depuis Blender, sauf cas particulier.)
 function ensureGeometryUVs(geometry) {
   if (!geometry) return;
   if (geometry.attributes && geometry.attributes.uv) {
@@ -78,6 +78,18 @@ function ensureGeometryUVs(geometry) {
   geometry.attributes.uv.needsUpdate = true;
 }
 
+// Variante forcée : régénère les UV même si elles existent déjà.
+// On ne l'utilise que pour des cas très ciblés (ex: LurePret5/Cube) où
+// on veut surcharger l'UV Blender pour que la texture recouvre tout le corps.
+function ensureGeometryUVsForce(geometry) {
+  if (!geometry) return;
+  // On supprime l'UV existante et on laisse ensureGeometryUVs en recréer une.
+  if (geometry.attributes && geometry.attributes.uv) {
+    geometry.deleteAttribute("uv");
+  }
+  ensureGeometryUVs(geometry);
+}
+
 function LureModel({
   modelType,
   color,
@@ -94,6 +106,7 @@ function LureModel({
   maskType = "none",
   collectionType = null, // "Palette" | "Hoo_B" | null
   textureUrl = null,
+  textureRotation = 0, // en degrés
   paletteType = null, // ex: "Palette_H", "Palette_M" (depuis Palettes.glb)
   tripleSize = null, // ex: "Triple_#1", "Triple_#2", "Triple_#4", "Triple_#6" (depuis N_Triple_Asset.glb)
   frontTripleSize = null, // pour LurePret5 : taille du triple à l'avant
@@ -118,6 +131,23 @@ function LureModel({
     console.log("LureModel debug", { modelType, modelPath });
 
     if (!scene) return;
+
+    // Appliquer une éventuelle rotation de texture (agissant partout où colorTexture est utilisée).
+    if (hasTexture && colorTexture) {
+      const rotationRad = (textureRotation * Math.PI) / 180;
+      colorTexture.center.set(0.5, 0.5);
+      colorTexture.rotation = rotationRad;
+      colorTexture.needsUpdate = true;
+    }
+
+    // Pour LurePret5, on force un dépliage UV "propre" du corps (Cube) quand une texture est active,
+    // pour que le motif recouvre tout le leurre indépendamment des UV Blender.
+    if (modelType === "LurePret5" && hasTexture && scene) {
+      const cube = scene.getObjectByName("Cube");
+      if (cube && cube.geometry) {
+        ensureGeometryUVsForce(cube.geometry);
+      }
+    }
 
     // DEBUG palettes : une fois par chargement, lister tous les noms de PalettesV4.glb
     if (palettesGltf?.scene && !palettesGltf.scene.userData.loggedNames) {
@@ -412,7 +442,7 @@ function LureModel({
             child.material = material;
           }
 
-          if (material.uniforms) {
+            if (material.uniforms) {
             if (material.uniforms.colorA) {
               material.uniforms.colorA.value.copy(topColor);
             }
@@ -456,9 +486,16 @@ function LureModel({
               material.uniforms.envStrength.value = 0.4;
             }
 
-            // Appliquer éventuelle texture de couleur (pike, etc.)
+            // Appliquer éventuelle texture Pike (mask) + angle
             if (material.uniforms.map) {
               material.uniforms.map.value = hasTexture ? colorTexture : null;
+            }
+            if (material.uniforms.mapRotation) {
+              material.uniforms.mapRotation.value =
+                (textureRotation * Math.PI) / 180;
+            }
+            if (material.uniforms.mapCenter) {
+              material.uniforms.mapCenter.value.set(0.5, 0.5);
             }
           }
         }
@@ -604,8 +641,9 @@ function LureModel({
           if (hasTexture && colorTexture) {
             // Mode texture simple :
             // - la couleur de base du leurre vient de targetColor (déjà copiée dans child.material.color)
-            // - la texture Pike-002 a un fond blanc, donc la map multiplie juste la couleur du leurre
+            // - la texture Pike a un fond clair, donc la map multiplie la couleur du leurre
             //   et les bandes plus sombres modulent la couleur.
+
             ensureGeometryUVs(child.geometry);
             mat.map = colorTexture;
             mat.transparent = false;
@@ -717,6 +755,7 @@ function LureModel({
     collectionType,
     colorTexture,
     hasTexture,
+    textureRotation,
     palettesGltf,
     paletteType,
     backPaletteType,
@@ -1027,6 +1066,7 @@ function CreateLurePage() {
   const [collectionType, setCollectionType] = useState("Palette"); // pour Lure25/26/27/28 : "Palette" | "Hoo_B"
   // Texture actuellement sélectionnée pour le corps du leurre (null = aucune)
   const [selectedTexture, setSelectedTexture] = useState(null); // ex: "/textures/Pike-002.png"
+  const [textureRotation, setTextureRotation] = useState(0); // angle en degrés
   const [paletteType, setPaletteType] = useState("Palette_H"); // palettes générales (avant)
   const [tripleSize, setTripleSize] = useState("Triple_#4"); // taille du triple à attacher (LurePret5 front/back)
   // Pour LurePret2 : tailles indépendantes pour l'attache avant / arrière.
@@ -1256,6 +1296,21 @@ function CreateLurePage() {
                     </button>
                   ))}
                 </div>
+                <div className="color-picker-row" style={{ marginTop: 12 }}>
+                  <span>Angle texture</span>
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={textureRotation}
+                    onChange={(e) => setTextureRotation(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ width: 48, textAlign: "right" }}>
+                    {textureRotation}°
+                  </span>
+                </div>
               </div>
             )}
 
@@ -1309,6 +1364,7 @@ function CreateLurePage() {
             <LureModel
               modelType={modelType}
               color={color}
+              // Le dégradé 3 couleurs est activé pour LurePret5 et les anciens modèles compatibles.
               useGradient={
                 modelType === "LurePret5" ||
                 modelType === "Lure11" ||
@@ -1363,6 +1419,7 @@ function CreateLurePage() {
                   : null
               }
               textureUrl={selectedTexture}
+              textureRotation={textureRotation}
               paletteType={modelType === "CollectionTest" ? paletteType : null}
               tripleSize={modelType === "Lurepret" ? tripleSize : null}
               frontTripleSize={
@@ -1420,6 +1477,10 @@ function CreateLurePage() {
           setColor={setColor}
           paletteType={paletteType}
           setPaletteType={setPaletteType}
+          selectedTexture={selectedTexture}
+          setSelectedTexture={setSelectedTexture}
+          textureRotation={textureRotation}
+          setTextureRotation={setTextureRotation}
           error={error}
           creating={creating}
           onSubmit={handleSubmit}

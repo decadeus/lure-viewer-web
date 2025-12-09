@@ -18,6 +18,8 @@ const PlasticGradientMaterial = shaderMaterial(
     heightMin: -0.5, // bornes pour normaliser la hauteur
     heightMax: 0.5,
     map: null, // texture de mask éventuellement
+    mapRotation: 0.0, // rotation de la texture (radians)
+    mapCenter: new THREE.Vector2(0.5, 0.5), // centre de rotation en UV
     lightDir: new THREE.Vector3(0.4, 0.8, 0.3).normalize(), // direction lumière
   },
   // vertex shader
@@ -63,6 +65,8 @@ const PlasticGradientMaterial = shaderMaterial(
     uniform float heightMin;
     uniform float heightMax;
     uniform sampler2D map;
+    uniform float mapRotation;
+    uniform vec2 mapCenter;
     uniform vec3 lightDir;
 
     varying vec2 vUv;
@@ -114,9 +118,19 @@ const PlasticGradientMaterial = shaderMaterial(
         + fresnel * vec3(1.0);   // liseré clair
 
       // Appliquer la texture de mask si présente (par multiplication)
-      // On applique une rotation de 90° de la texture autour du centre de l'UV.
-      vec2 rotatedUv = vec2(1.0 - vUv.y, vUv.x);
-      vec4 texColor = texture2D(map, rotatedUv);
+      vec2 uvLocal = vUv;
+      // Si une rotation est définie, on tourne les UV autour de mapCenter
+      if (abs(mapRotation) > 0.0001) {
+        vec2 centered = uvLocal - mapCenter;
+        float c = cos(mapRotation);
+        float s = sin(mapRotation);
+        uvLocal = vec2(
+          c * centered.x - s * centered.y,
+          s * centered.x + c * centered.y
+        ) + mapCenter;
+      }
+
+      vec4 texColor = texture2D(map, uvLocal);
       // Si la texture a un alpha ou une luminosité, l'utiliser comme masque
       float maskFactor = max(texColor.a, max(texColor.r, max(texColor.g, texColor.b)));
       if (maskFactor > 0.001) {
