@@ -20,6 +20,9 @@ const PlasticGradientMaterial = shaderMaterial(
     map: null, // texture de mask éventuellement
     mapRotation: 0.0, // rotation de la texture (radians)
     mapCenter: new THREE.Vector2(0.5, 0.5), // centre de rotation en UV
+    mapScale: new THREE.Vector2(1.0, 1.0), // échelle U/V de la texture
+    blurRadius: 0.0, // 0 = net, 1 = flou maximum
+    textureStrength: 1.0, // 0 = texture invisible, 1 = texture pleine
     lightDir: new THREE.Vector3(0.4, 0.8, 0.3).normalize(), // direction lumière
   },
   // vertex shader
@@ -67,6 +70,9 @@ const PlasticGradientMaterial = shaderMaterial(
     uniform sampler2D map;
     uniform float mapRotation;
     uniform vec2 mapCenter;
+    uniform vec2 mapScale;
+    uniform float blurRadius;
+    uniform float textureStrength;
     uniform vec3 lightDir;
 
     varying vec2 vUv;
@@ -130,11 +136,43 @@ const PlasticGradientMaterial = shaderMaterial(
         ) + mapCenter;
       }
 
-      vec4 texColor = texture2D(map, uvLocal);
-      // Si la texture a un alpha ou une luminosité, l'utiliser comme masque
+      // Appliquer l'échelle de texture (mapScale)
+      vec2 centeredForScale = uvLocal - mapCenter;
+      uvLocal = centeredForScale * mapScale + mapCenter;
+
+      // Échantillonnage de la texture, avec éventuel flou simple
+      vec4 texCenter = texture2D(map, uvLocal);
+      vec4 texColor = texCenter;
+
+      // blurRadius est attendu dans [0,1] (slider).
+      // On applique un flou 3x3 plus marqué pour que l'effet soit bien visible.
+      if (blurRadius > 0.001) {
+        float radius = mix(0.01, 0.06, clamp(blurRadius, 0.0, 1.0));
+        vec2 offs[8];
+        offs[0] = vec2( radius, 0.0);
+        offs[1] = vec2(-radius, 0.0);
+        offs[2] = vec2(0.0,  radius);
+        offs[3] = vec2(0.0, -radius);
+        offs[4] = vec2( radius,  radius);
+        offs[5] = vec2(-radius,  radius);
+        offs[6] = vec2( radius, -radius);
+        offs[7] = vec2(-radius, -radius);
+
+        vec4 accum = texCenter;
+        for (int i = 0; i < 8; i++) {
+          accum += texture2D(map, uvLocal + offs[i]);
+        }
+        vec4 blurred = accum / 9.0;
+        float k = clamp(blurRadius, 0.0, 1.0);
+        texColor = mix(texCenter, blurred, k);
+      }
+      // Si la texture a un alpha ou une luminosité, l'utiliser comme masque,
+      // modulé par textureStrength (0-1) pour la "visibilité" de la texture.
       float maskFactor = max(texColor.a, max(texColor.r, max(texColor.g, texColor.b)));
-      if (maskFactor > 0.001) {
-        color *= mix(vec3(1.0), texColor.rgb, maskFactor);
+      float kTex = clamp(textureStrength, 0.0, 1.0);
+      float blendFactor = maskFactor * kTex;
+      if (blendFactor > 0.001) {
+        color *= mix(vec3(1.0), texColor.rgb, blendFactor);
       }
 
       gl_FragColor = vec4(color, 1.0);

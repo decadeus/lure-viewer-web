@@ -120,6 +120,12 @@ export function CreateLureSidebar({
   setSelectedTexture,
   textureRotation,
   setTextureRotation,
+  textureScale,
+  setTextureScale,
+  textureBlur,
+  setTextureBlur,
+  textureStrength,
+  setTextureStrength,
   error,
   creating,
   onSubmit,
@@ -283,6 +289,54 @@ export function CreateLureSidebar({
             />
             <span style={{ width: 48, textAlign: "right" }}>
               {textureRotation}°
+            </span>
+          </div>
+          <div className="color-picker-row" style={{ marginTop: 8 }}>
+            <span>Taille texture</span>
+            <input
+              type="range"
+              min={0.25}
+              max={4}
+              step={0.05}
+              value={textureScale}
+              onChange={(e) => setTextureScale(Number(e.target.value))}
+              style={{ flex: 1 }}
+            />
+            <span style={{ width: 48, textAlign: "right" }}>
+              x
+              {textureScale.toFixed(2)}
+            </span>
+          </div>
+          <div className="color-picker-row" style={{ marginTop: 8 }}>
+            <span>Visibilité texture</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={textureStrength}
+              onChange={(e) => setTextureStrength(Number(e.target.value))}
+              style={{ flex: 1 }}
+            />
+            <span style={{ width: 48, textAlign: "right" }}>
+              {Math.round(textureStrength * 100)}
+              %
+            </span>
+          </div>
+          <div className="color-picker-row" style={{ marginTop: 8 }}>
+            <span>Flou texture</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={textureBlur}
+              onChange={(e) => setTextureBlur(Number(e.target.value))}
+              style={{ flex: 1 }}
+            />
+            <span style={{ width: 48, textAlign: "right" }}>
+              {Math.round(textureBlur * 100)}
+              %
             </span>
           </div>
         </section>

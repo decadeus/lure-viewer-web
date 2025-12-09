@@ -107,6 +107,9 @@ function LureModel({
   collectionType = null, // "Palette" | "Hoo_B" | null
   textureUrl = null,
   textureRotation = 0, // en degrés
+  textureScale = 1, // échelle U (densité) de la texture
+  textureBlur = 0, // 0 = net, 1 = flou
+  textureStrength = 1, // 0 = texture invisible, 1 = pleine
   paletteType = null, // ex: "Palette_H", "Palette_M" (depuis Palettes.glb)
   tripleSize = null, // ex: "Triple_#1", "Triple_#2", "Triple_#4", "Triple_#6" (depuis N_Triple_Asset.glb)
   frontTripleSize = null, // pour LurePret5 : taille du triple à l'avant
@@ -132,11 +135,14 @@ function LureModel({
 
     if (!scene) return;
 
-    // Appliquer une éventuelle rotation de texture (agissant partout où colorTexture est utilisée).
+    // Appliquer une éventuelle rotation de texture (agissant partout où colorTexture est utilisée),
+    // et activer le RepeatWrapping pour que la texture puisse se répéter sur tout le corps.
     if (hasTexture && colorTexture) {
       const rotationRad = (textureRotation * Math.PI) / 180;
       colorTexture.center.set(0.5, 0.5);
       colorTexture.rotation = rotationRad;
+      colorTexture.wrapS = THREE.RepeatWrapping;
+      colorTexture.wrapT = THREE.RepeatWrapping;
       colorTexture.needsUpdate = true;
     }
 
@@ -486,7 +492,7 @@ function LureModel({
               material.uniforms.envStrength.value = 0.4;
             }
 
-            // Appliquer éventuelle texture Pike (mask) + angle
+            // Appliquer éventuelle texture Pike (mask) + angle / échelle / flou
             if (material.uniforms.map) {
               material.uniforms.map.value = hasTexture ? colorTexture : null;
             }
@@ -496,6 +502,16 @@ function LureModel({
             }
             if (material.uniforms.mapCenter) {
               material.uniforms.mapCenter.value.set(0.5, 0.5);
+            }
+            if (material.uniforms.mapScale) {
+              const scaleU = Math.max(0.1, textureScale || 1);
+              material.uniforms.mapScale.value.set(scaleU, 1.0);
+            }
+            if (material.uniforms.blurRadius) {
+              material.uniforms.blurRadius.value = textureBlur;
+            }
+            if (material.uniforms.textureStrength) {
+              material.uniforms.textureStrength.value = textureStrength;
             }
           }
         }
@@ -756,6 +772,9 @@ function LureModel({
     colorTexture,
     hasTexture,
     textureRotation,
+    textureScale,
+    textureBlur,
+    textureStrength,
     palettesGltf,
     paletteType,
     backPaletteType,
@@ -1067,6 +1086,9 @@ function CreateLurePage() {
   // Texture actuellement sélectionnée pour le corps du leurre (null = aucune)
   const [selectedTexture, setSelectedTexture] = useState(null); // ex: "/textures/Pike-002.png"
   const [textureRotation, setTextureRotation] = useState(0); // angle en degrés
+  const [textureScale, setTextureScale] = useState(1); // échelle U (densité)
+  const [textureBlur, setTextureBlur] = useState(0); // 0-1 (force du flou)
+  const [textureStrength, setTextureStrength] = useState(1); // 0-1 (visibilité de la texture)
   const [paletteType, setPaletteType] = useState("Palette_H"); // palettes générales (avant)
   const [tripleSize, setTripleSize] = useState("Triple_#4"); // taille du triple à attacher (LurePret5 front/back)
   // Pour LurePret2 : tailles indépendantes pour l'attache avant / arrière.
@@ -1311,6 +1333,56 @@ function CreateLurePage() {
                     {textureRotation}°
                   </span>
                 </div>
+                <div className="color-picker-row" style={{ marginTop: 8 }}>
+                  <span>Taille texture</span>
+                  <input
+                    type="range"
+                    min={0.25}
+                    max={4}
+                    step={0.05}
+                    value={textureScale}
+                    onChange={(e) => setTextureScale(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ width: 48, textAlign: "right" }}>
+                    x
+                    {textureScale.toFixed(2)}
+                  </span>
+                </div>
+                <div className="color-picker-row" style={{ marginTop: 8 }}>
+                  <span>Visibilité texture</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={textureStrength}
+                    onChange={(e) =>
+                      setTextureStrength(Number(e.target.value))
+                    }
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ width: 48, textAlign: "right" }}>
+                    {Math.round(textureStrength * 100)}
+                    %
+                  </span>
+                </div>
+                <div className="color-picker-row" style={{ marginTop: 8 }}>
+                  <span>Flou texture</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={textureBlur}
+                    onChange={(e) => setTextureBlur(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ width: 48, textAlign: "right" }}>
+                    {Math.round(textureBlur * 100)}
+                    %
+                  </span>
+                </div>
               </div>
             )}
 
@@ -1420,6 +1492,9 @@ function CreateLurePage() {
               }
               textureUrl={selectedTexture}
               textureRotation={textureRotation}
+              textureScale={textureScale}
+              textureBlur={textureBlur}
+              textureStrength={textureStrength}
               paletteType={modelType === "CollectionTest" ? paletteType : null}
               tripleSize={modelType === "Lurepret" ? tripleSize : null}
               frontTripleSize={
@@ -1481,6 +1556,12 @@ function CreateLurePage() {
           setSelectedTexture={setSelectedTexture}
           textureRotation={textureRotation}
           setTextureRotation={setTextureRotation}
+          textureScale={textureScale}
+          setTextureScale={setTextureScale}
+          textureBlur={textureBlur}
+          setTextureBlur={setTextureBlur}
+          textureStrength={textureStrength}
+          setTextureStrength={setTextureStrength}
           error={error}
           creating={creating}
           onSubmit={handleSubmit}
