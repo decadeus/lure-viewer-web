@@ -177,23 +177,25 @@ export function CreateLureSidebar({
           </div>
         </section>
 
-        <section className="panel" style={{ marginBottom: 12 }}>
-          <h2 className="panel-title">Type de nage</h2>
-          <div className="home-type-filters">
-            {["SlallowRunner", "MediumRunner", "DeepRunner"].map((type) => (
-              <button
-                key={type}
-                type="button"
-                className={`home-type-filter-btn${
-                  runnerType === type ? " home-type-filter-btn--active" : ""
-                }`}
-                onClick={() => setRunnerType(type)}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-        </section>
+        {modelType !== "LurePret5" && (
+          <section className="panel" style={{ marginBottom: 12 }}>
+            <h2 className="panel-title">Type de nage</h2>
+            <div className="home-type-filters">
+              {["SlallowRunner", "MediumRunner", "DeepRunner"].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  className={`home-type-filter-btn${
+                    runnerType === type ? " home-type-filter-btn--active" : ""
+                  }`}
+                  onClick={() => setRunnerType(type)}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Anciennes collections Lure25-29 désactivées pour le moment */}
         {false && (
@@ -234,7 +236,8 @@ export function CreateLureSidebar({
 
         <section className="panel">
           <h2 className="panel-title">Couleur du leurre</h2>
-          {modelType === "Lure11" ||
+          {modelType === "LurePret5" ||
+          modelType === "Lure11" ||
           modelType === "Lure12" ||
           modelType === "Lure13" ||
           modelType === "Lure14" ||

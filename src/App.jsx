@@ -18,11 +18,64 @@ import { CreateLureSidebar } from "./CreateLureSidebar";
 function getModelPath(modelType) {
   switch (modelType) {
     case "LurePret5":
-      return "/models/LurePret5.glb";
+      return "/models/LurePret7.glb";
     default:
-      // Fallback : tous les anciens modèles pointent maintenant sur LurePret5
-      return "/models/LurePret5.glb";
+      // Fallback : tous les anciens modèles pointent maintenant sur LurePret7
+      return "/models/LurePret7.glb";
   }
+}
+
+// Génère des UV simples pour le mesh UNIQUEMENT s'il n'en a pas déjà.
+// (On ne veut surtout pas écraser les UV exportées depuis Blender.)
+function ensureGeometryUVs(geometry) {
+  if (!geometry) return;
+  if (geometry.attributes && geometry.attributes.uv) {
+    // Déjà des UV -> on ne touche à rien.
+    return;
+  }
+
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  if (!box) return;
+
+  const pos = geometry.attributes.position;
+  if (!pos) return;
+
+  const size = new THREE.Vector3();
+  box.getSize(size);
+
+  // Choisir les 2 axes les plus grands pour projeter la texture (meilleure répartition).
+  const axes = [
+    { key: "x", size: Math.abs(size.x) },
+    { key: "y", size: Math.abs(size.y) },
+    { key: "z", size: Math.abs(size.z) },
+  ].sort((a, b) => b.size - a.size);
+
+  const axisU = axes[0]?.key || "x";
+  const axisV = axes[1]?.key || "z";
+
+  const spanU =
+    Math.abs(size[axisU]) > 1e-5 ? size[axisU] : 1;
+  const spanV =
+    Math.abs(size[axisV]) > 1e-5 ? size[axisV] : 1;
+
+  const uv = new THREE.Float32BufferAttribute(pos.count * 2, 2);
+
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+
+    const coord = { x, y, z };
+
+    const u = (coord[axisU] - box.min[axisU]) / spanU;
+    const v = (coord[axisV] - box.min[axisV]) / spanV;
+
+    uv.setXY(i, u, v);
+  }
+
+  geometry.setAttribute("uv", uv);
+  geometry.attributes.uv.needsUpdate = true;
 }
 
 function LureModel({
@@ -51,7 +104,7 @@ function LureModel({
   const gltf = useGLTF(modelPath);
   const { scene } = gltf;
   // Charger une texture (même si on ne l'utilise pas toujours) pour respecter les règles des hooks.
-  const colorTexture = useTexture(textureUrl || "/textures/piketexture2.png");
+  const colorTexture = useTexture(textureUrl || "/textures/Pike-002.png");
   const hasTexture = !!textureUrl;
   // Fichier commun contenant toutes les palettes disponibles
   // (PalettesV5.glb avec points d'attache Palette_Attach_H/M/L)
@@ -410,7 +463,11 @@ function LureModel({
           }
         }
       });
-      return;
+      // Important : on ne fait PLUS de "return" ici.
+      // On laisse la suite de l'effet s'exécuter pour gérer :
+      // - les palettes / triples
+      // - les textures "classiques" sur d'autres meshes
+      // tout en évitant de modifier les meshes qui utilisent déjà PlasticGradientMaterial.
     }
 
     // Pour certains modèles, on conserve les couleurs / matériaux d'origine
@@ -439,6 +496,11 @@ function LureModel({
       modelType === "Lure29";
     scene.traverse((child) => {
       if (child.isMesh && child.material && child.material.color) {
+        // Si le mesh utilise déjà le matériau de gradient plastique,
+        // on ne recolorise pas pour ne pas casser le shader de dégradé.
+        if (useGradient && child.material instanceof PlasticGradientMaterial) {
+          return;
+        }
         const matName = child.material.name?.toLowerCase?.() || "";
 
         // Ne jamais toucher aux matériaux de mask (Pike / Card)
@@ -513,6 +575,7 @@ function LureModel({
         }
 
         // Ne pas recolorer les yeux (ils restent noirs brillants)
+
         // Couleur de base du corps du leurre
         child.material.color.copy(targetColor);
 
@@ -538,29 +601,44 @@ function LureModel({
         }
 
         if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
-          // Si une texture de couleur est active (ex: Pike), on l'applique
           if (hasTexture && colorTexture) {
+            // Mode texture simple :
+            // - la couleur de base du leurre vient de targetColor (déjà copiée dans child.material.color)
+            // - la texture Pike-002 a un fond blanc, donc la map multiplie juste la couleur du leurre
+            //   et les bandes plus sombres modulent la couleur.
+            ensureGeometryUVs(child.geometry);
             mat.map = colorTexture;
-            mat.needsUpdate = true;
-          }
-
-          if (isPaletteLure) {
-            // Aspect plastique brillant : moins métallique, un peu plus de roughness
-            mat.roughness = 0.16;
-            mat.metalness = 0.35;
-            mat.envMapIntensity = 1.8;
-            if ("clearcoat" in mat) {
-              mat.clearcoat = 1.0;
-              mat.clearcoatRoughness = 0.06;
+            mat.transparent = false;
+            mat.opacity = 1.0;
+            if (mat.map) {
+              mat.map.needsUpdate = true;
             }
+            mat.needsUpdate = true;
           } else {
-            // Aspect très métallique pour les autres leurres
-            mat.roughness = 0.03; // quasi miroir
-            mat.metalness = 0.85; // très métallique
-            mat.envMapIntensity = 3.0;
-            if ("clearcoat" in mat) {
-              mat.clearcoat = 1.0;
-              mat.clearcoatRoughness = 0.02;
+            // Mode sans texture : on nettoie bien la map pour éviter de garder la texture précédente
+            if (mat.map) {
+              mat.map = null;
+              mat.needsUpdate = true;
+            }
+
+            if (isPaletteLure) {
+              // Aspect plastique légèrement brillant, peu métallique
+              mat.roughness = 0.28;
+              mat.metalness = 0.18;
+              mat.envMapIntensity = 1.1;
+              if ("clearcoat" in mat) {
+                mat.clearcoat = 0.9;
+                mat.clearcoatRoughness = 0.12;
+              }
+            } else {
+              // Aspect plus satiné : beaucoup moins métallique, davantage diffus
+              mat.roughness = 0.3;
+              mat.metalness = 0.35;
+              mat.envMapIntensity = 1.4;
+              if ("clearcoat" in mat) {
+                mat.clearcoat = 0.85;
+                mat.clearcoatRoughness = 0.16;
+              }
             }
           }
         }
@@ -648,6 +726,18 @@ function LureModel({
     backTripleSize,
   ]);
 
+  // DEBUG texture / matériaux : liste les meshes avec info UV / texture
+  scene.traverse((child) => {
+    if (child.isMesh) {
+      // eslint-disable-next-line no-console
+      console.log("LureModel mesh debug", child.name, {
+        hasUV: !!child.geometry?.attributes?.uv,
+        hasMap: !!child.material?.map,
+        materialType: child.material?.type,
+      });
+    }
+  });
+
   return <primitive object={scene} />;
 }
 
@@ -655,7 +745,7 @@ useGLTF.preload("/models/Lure26.glb");
 useGLTF.preload("/models/Lure27.glb");
 useGLTF.preload("/models/Lure28.glb");
 useGLTF.preload("/models/Lure29.glb");
-useGLTF.preload("/models/LurePret5.glb");
+useGLTF.preload("/models/LurePret7.glb");
 useGLTF.preload("/models/CollectionTest.glb");
 useGLTF.preload("/Palettes/PalettesV5.glb");
 useGLTF.preload("/Triple/N_Triple_Asset.glb");
@@ -935,7 +1025,8 @@ function CreateLurePage() {
   const [runnerType, setRunnerType] = useState("SlallowRunner");
   const [maskType, setMaskType] = useState("none"); // "none" | "pike" | "card"
   const [collectionType, setCollectionType] = useState("Palette"); // pour Lure25/26/27/28 : "Palette" | "Hoo_B"
-  const [usePikeTexture, setUsePikeTexture] = useState(false);
+  // Texture actuellement sélectionnée pour le corps du leurre (null = aucune)
+  const [selectedTexture, setSelectedTexture] = useState(null); // ex: "/textures/Pike-002.png"
   const [paletteType, setPaletteType] = useState("Palette_H"); // palettes générales (avant)
   const [tripleSize, setTripleSize] = useState("Triple_#4"); // taille du triple à attacher (LurePret5 front/back)
   // Pour LurePret2 : tailles indépendantes pour l'attache avant / arrière.
@@ -1131,23 +1222,39 @@ function CreateLurePage() {
                   <span className="assets-section-title">Textures</span>
                 </div>
                 <div className="texture-list">
-                  <button
-                    type="button"
-                    className={`texture-item${
-                      usePikeTexture ? " texture-item--active" : ""
-                    }`}
-                    onClick={() => setUsePikeTexture((v) => !v)}
-                  >
-                    <div className="texture-thumb texture-thumb--pike" />
-                    <div className="texture-meta">
-                      <span className="texture-name">Texture Pike</span>
-                      <span className="texture-tag">
-                        {usePikeTexture
-                          ? "Utilisée sur le leurre"
-                          : "Cliquer pour appliquer"}
-                      </span>
-                    </div>
-                  </button>
+                  {[
+                    {
+                      key: "/textures/Pike-002.png",
+                      name: "Pike 1",
+                    },
+                    {
+                      key: "/textures/Pike_003.png",
+                      name: "Pike 2",
+                    },
+                  ].map((tex) => (
+                    <button
+                      key={tex.key}
+                      type="button"
+                      className={`texture-item${
+                        selectedTexture === tex.key ? " texture-item--active" : ""
+                      }`}
+                      onClick={() =>
+                        setSelectedTexture((current) =>
+                          current === tex.key ? null : tex.key,
+                        )
+                      }
+                    >
+                      <div className="texture-thumb texture-thumb--pike" />
+                      <div className="texture-meta">
+                        <span className="texture-name">{tex.name}</span>
+                        <span className="texture-tag">
+                          {selectedTexture === tex.key
+                            ? "Utilisée sur le leurre"
+                            : "Cliquer pour appliquer"}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -1203,6 +1310,7 @@ function CreateLurePage() {
               modelType={modelType}
               color={color}
               useGradient={
+                modelType === "LurePret5" ||
                 modelType === "Lure11" ||
                 modelType === "Lure12" ||
                 modelType === "Lure13" ||
@@ -1227,6 +1335,7 @@ function CreateLurePage() {
               gradientSmoothness2={gradientStrength2 / 100}
               gradientCenter2={gradientPosition2 / 100}
               gradientTargetName={
+                modelType === "LurePret5" ||
                 modelType === "Lure12" ||
                 modelType === "Lure13" ||
                 modelType === "Lure14" ||
@@ -1253,7 +1362,7 @@ function CreateLurePage() {
                   ? collectionType
                   : null
               }
-              textureUrl={usePikeTexture ? "/textures/piketexture2.png" : null}
+              textureUrl={selectedTexture}
               paletteType={modelType === "CollectionTest" ? paletteType : null}
               tripleSize={modelType === "Lurepret" ? tripleSize : null}
               frontTripleSize={
