@@ -22,6 +22,7 @@ export function attachPaletteToLure({
   palettesGltf,
   paletteName,
   socketName = "Attach_Back_Add",
+  lureScale = 1,
 }) {
   if (!scene || !palettesGltf?.scene) return;
 
@@ -43,6 +44,15 @@ export function attachPaletteToLure({
   }
 
   const paletteRoot = palettesGltf.scene.clone(true);
+
+  // Compenser la taille globale du leurre :
+  // si le leurre est agrandi (L / XL), on réduit
+  // la palette pour qu'elle garde une taille monde constante.
+  const scaleFactor =
+    Number.isFinite(lureScale) && lureScale > 0 ? lureScale : 1;
+  if (scaleFactor !== 1) {
+    paletteRoot.scale.multiplyScalar(1 / scaleFactor);
+  }
 
   const variantKeys = ["Palette_H", "Palette_M", "Palette_L"];
   const defaultVariantKey = "Palette_M";
@@ -121,4 +131,3 @@ export function attachPaletteToLure({
 
   socket.add(paletteRoot);
 }
-

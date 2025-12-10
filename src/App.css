@@ -38,6 +38,23 @@
   height: 100%;
 }
 
+/* Panneau des dimensions du leurre */
+.lure-dimensions-panel {
+  position: absolute;
+  top: 130px; /* placé sous le gizmo X/Y/Z (margin 80px) */
+  right: 80px; /* aligné horizontalement avec le gizmo sans chevauchement */
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e5e7eb;
+  font-size: 0.8rem;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .sidebar {
   width: 320px;
   background: rgba(15, 23, 42, 0.96);

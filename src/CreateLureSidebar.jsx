@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import { LurePret5PaletteControls } from "./PaletteControls";
+import { EyeControls } from "./EyeControls";
 
 // Slider avec 2 curseurs (bas / haut) sur une seule barre, utilisé pour le gradient 3 couleurs
 function DualPositionSlider({ min = 0, max = 100, valueLow, valueHigh, onChange }) {
@@ -120,6 +121,8 @@ export function CreateLureSidebar({
   setEyeWhiteColor,
   eyeIrisColor,
   setEyeIrisColor,
+  lureSize,
+  setLureSize,
   paletteType,
   setPaletteType,
   selectedTexture,
@@ -194,6 +197,27 @@ export function CreateLureSidebar({
                 </option>
               ))}
             </select>
+          </div>
+          <div className="color-picker-row" style={{ marginTop: 8 }}>
+            <span>Taille</span>
+            <div className="home-type-filters" style={{ flex: 1 }}>
+              {[
+                { key: "M", label: "M" },
+                { key: "L", label: "L" },
+                { key: "XL", label: "XL" },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  className={`home-type-filter-btn${
+                    lureSize === opt.key ? " home-type-filter-btn--active" : ""
+                  }`}
+                  onClick={() => setLureSize(opt.key)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -398,19 +422,19 @@ export function CreateLureSidebar({
           </button>
           {activeSection === "colors" &&
           (modelType === "LurePret5" ||
-          modelType === "Lure11" ||
-          modelType === "Lure12" ||
-          modelType === "Lure13" ||
-          modelType === "Lure14" ||
-          modelType === "Lure15" ||
-          modelType === "Lure16" ||
-          modelType === "Lure17" ||
-          modelType === "Lure18" ||
-          modelType === "Lure19" ||
-          modelType === "Lure20" ||
-          modelType === "Lure21" ||
-          modelType === "Lure22" ||
-          modelType === "Lure29") ? (
+            modelType === "Lure11" ||
+            modelType === "Lure12" ||
+            modelType === "Lure13" ||
+            modelType === "Lure14" ||
+            modelType === "Lure15" ||
+            modelType === "Lure16" ||
+            modelType === "Lure17" ||
+            modelType === "Lure18" ||
+            modelType === "Lure19" ||
+            modelType === "Lure20" ||
+            modelType === "Lure21" ||
+            modelType === "Lure22" ||
+            modelType === "Lure29") ? (
             <>
               <div className="color-picker-row">
                 <span>Couleur haut</span>
@@ -531,27 +555,6 @@ export function CreateLureSidebar({
                   </div>
                 </div>
               )}
-              {/* Couleurs des yeux (Blanc / Iris) pour LurePret5 et futurs modèles compatibles */}
-              {modelType === "LurePret5" && (
-                <>
-                  <div className="color-picker-row" style={{ marginTop: 8 }}>
-                    <span>Blanc de l&apos;œil</span>
-                    <input
-                      type="color"
-                      value={eyeWhiteColor}
-                      onChange={(e) => setEyeWhiteColor(e.target.value)}
-                    />
-                  </div>
-                  <div className="color-picker-row" style={{ marginTop: 8 }}>
-                    <span>Iris</span>
-                    <input
-                      type="color"
-                      value={eyeIrisColor}
-                      onChange={(e) => setEyeIrisColor(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
             </>
           ) : (
             <div className="color-picker-row">
@@ -589,16 +592,24 @@ export function CreateLureSidebar({
               {error}
             </p>
           )}
-
-          <button
-            type="submit"
-            className="primary-btn"
-            disabled={creating}
-            style={{ marginTop: 12, width: "100%" }}
-          >
-            {creating ? "Création..." : "Sauvegarder"}
-          </button>
         </section>
+
+        {/* Section spécifique : Yeux */}
+        <EyeControls
+          eyeWhiteColor={eyeWhiteColor}
+          setEyeWhiteColor={setEyeWhiteColor}
+          eyeIrisColor={eyeIrisColor}
+          setEyeIrisColor={setEyeIrisColor}
+        />
+
+        <button
+          type="submit"
+          className="primary-btn"
+          disabled={creating}
+          style={{ marginTop: 12, width: "100%" }}
+        >
+          {creating ? "Création..." : "Sauvegarder"}
+        </button>
       </form>
     </aside>
   );

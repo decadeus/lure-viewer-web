@@ -1,7 +1,16 @@
 import { useEffect, useState, useRef } from "react";
 import { Routes, Route, useNavigate, useParams } from "react-router-dom";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Environment, useGLTF, useTexture } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import {
+  OrbitControls,
+  Environment,
+  useGLTF,
+  useTexture,
+  Html,
+  GizmoHelper,
+  GizmoViewport,
+  Line,
+} from "@react-three/drei";
 import * as THREE from "three";
 import "./App.css";
 import { supabase } from "./supabaseClient";
@@ -119,6 +128,8 @@ function LureModel({
   backPaletteType = null, // pour LurePret5 : Palette_H / M / L à l'arrière
   eyeWhiteColor = "#ffffff", // couleur de la partie "Blanc" de l'œil (sclère)
   eyeIrisColor = "#000000", // couleur de la partie "Iris" autour de l'œil
+  lureSize = "M", // \"M\" (base), \"L\" (x1.25), \"XL\" (x1.5)
+  onComputedDimensionsCm = null,
 }) {
   const modelPath = getModelPath(modelType);
   const gltf = useGLTF(modelPath);
@@ -132,6 +143,8 @@ function LureModel({
   const palettesGltf = useGLTF("/Palettes/PalettesV5.glb");
   // Accessoire Triple (N_Triple_Asset.glb) pour certains leurres (plusieurs tailles)
   const tripleGltf = useGLTF("/Triple/N_Triple_Asset.glb");
+  // Modèle de référence contenant le cube Taille_M pour la calibration des cm
+  const referenceGltf = useGLTF("/models/LurePret8.glb");
 
   useEffect(() => {
     // DEBUG: vérifier que le bon modèle est bien utilisé
@@ -188,11 +201,27 @@ function LureModel({
     //   );
     // }
 
+    // 1) Calibration unités 3D -> centimètres via le cube Taille_M
+    if (!scene.userData.cmPerWorldUnit && referenceGltf?.scene) {
+      const refCube = referenceGltf.scene.getObjectByName("Taille_M");
+      if (refCube) {
+        const refBox = new THREE.Box3().setFromObject(refCube);
+        const refSize = refBox.getSize(new THREE.Vector3());
+        const refLengthUnits = Math.abs(refSize.x) || 1;
+        const refLengthCm = 4.0; // Taille_M correspond à ~4 cm réels (40 cm / x10)
+        scene.userData.cmPerWorldUnit = refLengthCm / refLengthUnits;
+      }
+    }
+
+    // 2) Normalisation du modèle (position/échelle) pour l'affichage
     if (!scene.userData.normalized) {
       const box = new THREE.Box3().setFromObject(scene);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
+
+      // Mémoriser les dimensions brutes du leurre avant normalisation (en unités 3D)
+      scene.userData.baseSizeWorld = size.clone();
 
       scene.position.sub(center);
       const scaleFactor = 1.5 / maxDim;
@@ -204,6 +233,47 @@ function LureModel({
       scene.userData.gradientHeightMax = normalizedBox.max.y;
 
       scene.userData.normalized = true;
+      scene.userData.currentSizeScale = 1;
+
+      // Conversion finale unités monde -> cm pour les axes après normalisation :
+      // worldPerCm = scaleFactor / cmPerWorldUnit
+      if (scene.userData.cmPerWorldUnit) {
+        scene.userData.worldPerCm = scaleFactor / scene.userData.cmPerWorldUnit;
+      }
+    }
+
+    // Ajuster la taille globale du leurre sans modifier la taille apparente
+    // des accessoires (triples / palettes) : on appliquera l'inverse lors
+    // de l'attache dans `attachTripleToLure` / `attachPaletteToLure`.
+    const sizeScale =
+      lureSize === "XL" ? 1.5 : lureSize === "L" ? 1.25 : 1.0;
+    if (scene.userData.currentSizeScale !== sizeScale) {
+      const fromScale = scene.userData.currentSizeScale || 1;
+      const factor = sizeScale / fromScale;
+      scene.scale.multiplyScalar(factor);
+      scene.userData.currentSizeScale = sizeScale;
+    }
+
+    // 3) Calcul des dimensions réelles approximatives du leurre en cm
+    if (scene.userData.cmPerWorldUnit && scene.userData.baseSizeWorld) {
+      const cmPerWorldUnit = scene.userData.cmPerWorldUnit;
+      const baseSizeCm = scene.userData.baseSizeWorld
+        .clone()
+        .multiplyScalar(cmPerWorldUnit);
+      const scaleFactorCurrent = scene.userData.currentSizeScale || 1;
+      const lengthCm = baseSizeCm.x * scaleFactorCurrent;
+      const heightCm = baseSizeCm.y * scaleFactorCurrent;
+      const widthCm = baseSizeCm.z * scaleFactorCurrent;
+      const worldPerCm = scene.userData.worldPerCm || 1 / cmPerWorldUnit;
+
+      if (typeof onComputedDimensionsCm === "function") {
+        onComputedDimensionsCm({
+          lengthCm,
+          heightCm,
+          widthCm,
+          worldPerCm,
+        });
+      }
     }
 
   // Pour certains modèles (LurePret5), on force un
@@ -801,7 +871,8 @@ function LureModel({
         scene,
         palettesGltf,
         paletteName: paletteType,
-        socketName: "PaletteSocket_Front",
+          socketName: "PaletteSocket_Front",
+          lureScale: sizeScale,
       });
 
       if (modelType === "LurePret5") {
@@ -810,6 +881,7 @@ function LureModel({
           palettesGltf,
           paletteName: backPaletteType,
           socketName: "Attach_Back_Add",
+          lureScale: sizeScale,
         });
       }
     }
@@ -836,6 +908,7 @@ function LureModel({
           tripleGltf,
           tripleSize: frontTripleSize,
           socketName: "Attach_Down_add",
+          lureScale: sizeScale,
         });
       }
       // À l'arrière, on choisit soit un triple, soit une palette (backPaletteType)
@@ -845,6 +918,7 @@ function LureModel({
           tripleGltf,
           tripleSize: backTripleSize,
           socketName: "Attach_Back_Add",
+          lureScale: sizeScale,
         });
       }
     }
@@ -882,6 +956,7 @@ function LureModel({
     backTripleSize,
     eyeWhiteColor,
     eyeIrisColor,
+    lureSize,
   ]);
 
   // DEBUG texture / matériaux : liste les meshes avec info UV / texture
@@ -897,6 +972,313 @@ function LureModel({
   });
 
   return <primitive object={scene} />;
+}
+
+// Axes mondes avec petits traits de repère tous les 1 cm (approximatif),
+// en utilisant la conversion unités 3D -> cm calculée via Taille_M.
+// maxCm est automatiquement ajusté pour couvrir la longueur du leurre.
+function AxesWithTicks({ worldPerCm, lengthCm, paddingCm = 2, defaultMaxCm = 10 }) {
+  if (!worldPerCm || !Number.isFinite(worldPerCm) || worldPerCm <= 0) {
+    // Fallback : axes simples sans repères si on n'a pas la conversion
+    return (
+      <>
+        <Line points={[[-5, 0, 0], [5, 0, 0]]} color="#ef4444" lineWidth={1} />
+        <Line points={[[0, -5, 0], [0, 5, 0]]} color="#3b82f6" lineWidth={1} />
+        <Line points={[[0, 0, -5], [0, 0, 5]]} color="#22c55e" lineWidth={1} />
+      </>
+    );
+  }
+
+  // Déterminer jusqu'où vont les axes en cm :
+  // - on couvre au moins la moitié de la longueur du leurre + un padding,
+  // - arrondi au multiple de 5 cm supérieur,
+  // - sinon on retombe sur defaultMaxCm.
+  let halfSpanCm = defaultMaxCm;
+  if (lengthCm && Number.isFinite(lengthCm) && lengthCm > 0) {
+    halfSpanCm = Math.max(
+      defaultMaxCm,
+      Math.ceil((lengthCm / 2 + paddingCm) / 5) * 5,
+    );
+  }
+
+  const maxCm = halfSpanCm;
+  const rangeWorld = maxCm * worldPerCm;
+  const tickSize = 0.08; // taille des petits traits (1 cm)
+  const majorTickSize = 0.14; // taille des traits tous les 5 cm
+
+  const ticksX = [];
+  const ticksY = [];
+  const ticksZ = [];
+  const majorTicksX = [];
+  const majorTicksY = [];
+  const majorTicksZ = [];
+
+  for (let i = -maxCm; i <= maxCm; i += 1) {
+    const offset = i * worldPerCm;
+    // Axe X : traits perpendiculaires en Y
+    ticksX.push([
+      [offset, -tickSize, 0],
+      [offset, tickSize, 0],
+    ]);
+    if (i !== 0 && i % 5 === 0) {
+      majorTicksX.push({
+        cm: i,
+        seg: [
+          [offset, -majorTickSize, 0],
+          [offset, majorTickSize, 0],
+        ],
+      });
+    }
+    // Axe Y : traits perpendiculaires en X
+    ticksY.push([
+      [-tickSize, offset, 0],
+      [tickSize, offset, 0],
+    ]);
+    if (i !== 0 && i % 5 === 0) {
+      majorTicksY.push({
+        cm: i,
+        seg: [
+          [-majorTickSize, offset, 0],
+          [majorTickSize, offset, 0],
+        ],
+      });
+    }
+    // Axe Z : traits perpendiculaires en X
+    ticksZ.push([
+      [-tickSize, 0, offset],
+      [tickSize, 0, offset],
+    ]);
+    if (i !== 0 && i % 5 === 0) {
+      majorTicksZ.push({
+        cm: i,
+        seg: [
+          [-majorTickSize, 0, offset],
+          [majorTickSize, 0, offset],
+        ],
+      });
+    }
+  }
+
+  return (
+    <group>
+      {/* Axes principaux */}
+      <Line
+        points={[
+          [-rangeWorld, 0, 0],
+          [rangeWorld, 0, 0],
+        ]}
+        color="#ef4444"
+        lineWidth={1}
+      />
+      <Line
+        points={[
+          [0, -rangeWorld, 0],
+          [0, rangeWorld, 0],
+        ]}
+        color="#3b82f6"
+        lineWidth={1}
+      />
+      <Line
+        points={[
+          [0, 0, -rangeWorld],
+          [0, 0, rangeWorld],
+        ]}
+        color="#22c55e"
+        lineWidth={1}
+      />
+
+      {/* Traits de repère tous les 1 cm */}
+      {ticksX.map((seg, idx) => (
+        <Line key={`tx-${idx}`} points={seg} color="#ef4444" lineWidth={1} />
+      ))}
+      {ticksY.map((seg, idx) => (
+        <Line key={`ty-${idx}`} points={seg} color="#3b82f6" lineWidth={1} />
+      ))}
+      {ticksZ.map((seg, idx) => (
+        <Line key={`tz-${idx}`} points={seg} color="#22c55e" lineWidth={1} />
+      ))}
+
+      {/* Traits et labels tous les 5 cm (côté positif uniquement pour la lisibilité) */}
+      {majorTicksX
+        .filter((t) => t.cm > 0)
+        .map((t) => (
+          <group key={`mtx-${t.cm}`}>
+            <Line points={t.seg} color="#ef4444" lineWidth={1.2} />
+            <Html
+              position={[t.seg[0][0], majorTickSize * 1.6, 0]}
+              center
+              style={{
+                fontSize: 9,
+                color: "#e5e7eb",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {t.cm}
+            </Html>
+          </group>
+        ))}
+
+      {majorTicksY
+        .filter((t) => t.cm > 0)
+        .map((t) => (
+          <group key={`mty-${t.cm}`}>
+            <Line points={t.seg} color="#3b82f6" lineWidth={1.2} />
+            <Html
+              position={[majorTickSize * 1.8, t.seg[0][1], 0]}
+              style={{
+                fontSize: 9,
+                color: "#e5e7eb",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {t.cm}
+            </Html>
+          </group>
+        ))}
+
+      {majorTicksZ
+        .filter((t) => t.cm > 0)
+        .map((t) => (
+          <group key={`mtz-${t.cm}`}>
+            <Line points={t.seg} color="#22c55e" lineWidth={1.2} />
+            <Html
+              position={[majorTickSize * 1.8, 0, t.seg[0][2]]}
+              style={{
+                fontSize: 9,
+                color: "#e5e7eb",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {t.cm}
+            </Html>
+          </group>
+        ))}
+    </group>
+  );
+}
+
+
+// (les anciens helpers de règles 2D ont été retirés pour simplifier l'affichage)
+
+// Règles 3D calibrées en cm pour LurePret5
+function Rulers3D({ modelType }) {
+  // On ne dessine les règles calibrées que pour LurePret5,
+  // celui pour lequel on connaît la longueur réelle.
+  if (modelType !== "LurePret5") return null;
+
+  // Après normalisation, la plus grande dimension du leurre vaut 1.5 unités monde.
+  // On sait que cela correspond à ~4.1 cm en réalité (taille M).
+  const cmPerWorldUnit = 4.1 / 1.5;
+  const worldPerCm = 1 / cmPerWorldUnit;
+
+  // Longueur des règles (en cm)
+  const horizontalLengthCm = 20; // 0–20 cm
+  const verticalLengthCm = 5; // 0–5 cm
+  const horizontalLengthWorld = horizontalLengthCm * worldPerCm;
+  const verticalLengthWorld = verticalLengthCm * worldPerCm;
+
+  // Hypothèse: le leurre est centré en (0,0,0) et sa longueur totale
+  // (pointe -> queue) vaut 1.5 unités monde après normalisation.
+  // On place donc le "0 cm" de la règle horizontale à la pointe du leurre.
+  const lureLengthWorld = 1.5;
+  const lureNoseX = -lureLengthWorld / 2; // pointe = extrémité gauche
+
+  // Décalage vertical léger au-dessus du leurre
+  const z = 0;
+  const horizontalY = 0.6 * worldPerCm;
+
+  // Règle horizontale : de 0 à 20 cm, collée à la pointe
+  const horizontalStartX = lureNoseX;
+  const horizontalEndX = horizontalStartX + horizontalLengthWorld;
+
+  const horizontalPoints = [
+    [horizontalStartX, horizontalY, z],
+    [horizontalEndX, horizontalY, z],
+  ];
+
+  // Règle verticale à gauche (au niveau de 0 cm)
+  const verticalX = horizontalStartX;
+  const verticalBaseYTop = horizontalY; // 0 cm au croisement avec l'horizontale
+  const verticalPoints = [
+    [verticalX, verticalBaseYTop, z],
+    [verticalX, verticalBaseYTop - verticalLengthWorld, z],
+  ];
+
+  const horizontalTicks = [];
+  for (let cm = 0; cm <= horizontalLengthCm; cm += 1) {
+    const x = horizontalStartX + cm * worldPerCm;
+    const isMajor = cm % 5 === 0;
+    const h = (isMajor ? 0.3 : 0.18) * worldPerCm;
+    horizontalTicks.push({ cm, x, h, isMajor });
+  }
+
+  const verticalTicks = [];
+  for (let cm = 0; cm <= verticalLengthCm; cm += 1) {
+    // 0 cm en haut (au niveau de l'horizontale), 5 cm en bas
+    const y = verticalBaseYTop - cm * worldPerCm;
+    const isMajor = cm % 1 === 0;
+    const w = (isMajor ? 0.3 : 0.18) * worldPerCm;
+    verticalTicks.push({ cm, y, w, isMajor });
+  }
+
+  return (
+    <group>
+      {/* Règle horizontale */}
+      <Line points={horizontalPoints} color="#e5e7eb" lineWidth={1} />
+      {horizontalTicks.map((t) => (
+        <group key={`h-${t.cm}`}>
+          <Line
+            points={[
+              [t.x, horizontalY, z],
+              [t.x, horizontalY + t.h, z],
+            ]}
+            color="#e5e7eb"
+            lineWidth={1}
+          />
+          {t.isMajor && (
+            <Html
+              position={[t.x, horizontalY + t.h + 0.12 * worldPerCm, z]}
+              center
+              style={{
+                fontSize: 10,
+                color: "#e5e7eb",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {t.cm}
+              {t.cm === horizontalLengthCm ? " cm" : ""}
+            </Html>
+          )}
+        </group>
+      ))}
+
+      {/* Règle verticale */}
+      <Line points={verticalPoints} color="#e5e7eb" lineWidth={1} />
+      {verticalTicks.map((t) => (
+        <group key={`v-${t.cm}`}>
+          <Line
+            points={[
+              [verticalX, t.y, z],
+              [verticalX + t.w, t.y, z],
+            ]}
+            color="#e5e7eb"
+            lineWidth={1}
+          />
+          <Html
+            position={[verticalX + t.w + 0.12 * worldPerCm, t.y, z]}
+            style={{
+              fontSize: 10,
+              color: "#e5e7eb",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {t.cm}
+            {t.cm === verticalLengthCm ? " cm" : ""}
+          </Html>
+        </group>
+      ))}
+    </group>
+  );
 }
 
 useGLTF.preload("/models/Lure26.glb");
@@ -1200,6 +1582,7 @@ function CreateLurePage() {
   const [backPaletteType, setBackPaletteType] = useState(null); // "Palette_H" | "Palette_M" | "Palette_L" | null
   const [eyeWhiteColor, setEyeWhiteColor] = useState("#ffffff");
   const [eyeIrisColor, setEyeIrisColor] = useState("#000000");
+  const [lureSize, setLureSize] = useState("M"); // M (base), L, XL
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   // Colonne gauche "à la Figma"
@@ -1208,6 +1591,7 @@ function CreateLurePage() {
   const [leftMainTab, setLeftMainTab] = useState("file"); // "file" | "assets"
   const [assetsView, setAssetsView] = useState("root"); // "root" | "textures" | "models"
   const glRef = useRef(null);
+  const [currentDimensionsCm, setCurrentDimensionsCm] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1634,13 +2018,54 @@ function CreateLurePage() {
               backPaletteType={modelType === "LurePret5" ? backPaletteType : null}
               eyeWhiteColor={eyeWhiteColor}
               eyeIrisColor={eyeIrisColor}
+              lureSize={lureSize}
+              onComputedDimensionsCm={setCurrentDimensionsCm}
             />
+            {/* Axes mondes X/Y/Z avec petits traits tous les 1 cm,
+                et graduations (5, 10, 15...) ajustées à la taille du leurre */}
+            <AxesWithTicks
+              worldPerCm={currentDimensionsCm?.worldPerCm}
+              lengthCm={currentDimensionsCm?.lengthCm}
+            />
+            {/* Gizmo façon Blender : axes X/Y/Z cliquables pour recadrer la vue */}
+            <GizmoHelper alignment="top-right" margin={[80, 80]}>
+              <GizmoViewport
+                axisColors={["#ef4444", "#3b82f6", "#22c55e"]}
+                labelColor="#e5e7eb"
+              />
+            </GizmoHelper>
             <OrbitControls
               enablePan={false}
               enableZoom
               target={[0, 0, 0]}
             />
           </Canvas>
+
+          {/* Petit panneau texte avec les dimensions approx. du leurre,
+              aligné avec le repère X/Y/Z en haut à droite */}
+          <div className="lure-dimensions-panel">
+            {currentDimensionsCm ? (
+              <>
+                <div>
+                  <strong>X</strong>{" "}
+                  {currentDimensionsCm.lengthCm.toFixed(1)}
+                  {" cm"}
+                </div>
+                <div>
+                  <strong>Y</strong>{" "}
+                  {currentDimensionsCm.heightCm.toFixed(1)}
+                  {" cm"}
+                </div>
+                <div>
+                  <strong>Z</strong>{" "}
+                  {currentDimensionsCm.widthCm.toFixed(1)}
+                  {" cm"}
+                </div>
+              </>
+            ) : (
+              <span>Dimensions en cours de calcul…</span>
+            )}
+          </div>
         </div>
 
         <CreateLureSidebar
@@ -1682,6 +2107,8 @@ function CreateLurePage() {
           setEyeWhiteColor={setEyeWhiteColor}
           eyeIrisColor={eyeIrisColor}
           setEyeIrisColor={setEyeIrisColor}
+          lureSize={lureSize}
+          setLureSize={setLureSize}
           paletteType={paletteType}
           setPaletteType={setPaletteType}
           selectedTexture={selectedTexture}

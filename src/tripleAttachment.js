@@ -23,6 +23,7 @@ export function attachTripleToLure({
   tripleGltf,
   tripleSize,
   socketName = "Attach_Down_add",
+  lureScale = 1,
 }) {
   if (!scene || !tripleGltf?.scene) return;
 
@@ -39,6 +40,15 @@ export function attachTripleToLure({
     });
 
   const tripleRoot = tripleGltf.scene.clone(true);
+
+  // Compenser la taille globale du leurre :
+  // si le leurre est agrandi (L / XL), on réduit
+  // le triple pour qu'il garde une taille monde constante.
+  const scaleFactor =
+    Number.isFinite(lureScale) && lureScale > 0 ? lureScale : 1;
+  if (scaleFactor !== 1) {
+    tripleRoot.scale.multiplyScalar(1 / scaleFactor);
+  }
 
   const variantKeys = ["Triple_#1", "Triple_#2", "Triple_#4", "Triple_#6"];
   const defaultVariantKey = "Triple_#4";
@@ -133,5 +143,3 @@ export function attachTripleToLure({
 
   socket.add(tripleRoot);
 }
-
-
