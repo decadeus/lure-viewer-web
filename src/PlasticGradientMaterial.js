@@ -15,14 +15,17 @@ const PlasticGradientMaterial = shaderMaterial(
     gradientCenter: 0.33, // 0 = bas, 1 = haut (position frontière haut/milieu)
     gradientSmoothness2: 1.0, // séparation milieu/bas
     gradientCenter2: 0.66, // position frontière milieu/bas
-    heightMin: -0.5, // bornes pour normaliser la hauteur
+    heightMin: -0.5, // bornes pour normaliser la coordonnée de gradient
     heightMax: 0.5,
+    gradientDir: new THREE.Vector3(0, 1, 0), // direction du gradient en espace monde
     map: null, // texture de mask éventuellement
     mapRotation: 0.0, // rotation de la texture (radians)
     mapCenter: new THREE.Vector2(0.5, 0.5), // centre de rotation en UV
     mapScale: new THREE.Vector2(1.0, 1.0), // échelle U/V de la texture
     blurRadius: 0.0, // 0 = net, 1 = flou maximum
     textureStrength: 1.0, // 0 = texture invisible, 1 = texture pleine
+    scalesMap: null, // texture d'écailles optionnelle
+    scalesStrength: 0.0, // 0 = pas d'écailles, 1 = écailles max
     lightDir: new THREE.Vector3(0.4, 0.8, 0.3).normalize(), // direction lumière
   },
   // vertex shader
@@ -33,6 +36,8 @@ const PlasticGradientMaterial = shaderMaterial(
     varying vec3 vWorldNormal;
     varying float vHeight;
 
+    uniform vec3 gradientDir;
+
     void main() {
       vUv = uv;
 
@@ -42,9 +47,10 @@ const PlasticGradientMaterial = shaderMaterial(
       // normales en espace monde (pour le gradient haut/bas du leurre)
       vWorldNormal = normalize(mat3(modelMatrix) * normal);
 
-      // position monde pour le gradient basé sur la hauteur
+      // position monde pour le gradient
       vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-      vHeight = worldPosition.y;
+      // Projeter la position sur la direction du gradient
+      vHeight = dot(worldPosition.xyz, gradientDir);
 
       // direction vers la caméra en espace vue
       vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
@@ -67,12 +73,15 @@ const PlasticGradientMaterial = shaderMaterial(
     uniform float gradientCenter2;
     uniform float heightMin;
     uniform float heightMax;
+    uniform vec3 gradientDir;
     uniform sampler2D map;
     uniform float mapRotation;
     uniform vec2 mapCenter;
     uniform vec2 mapScale;
     uniform float blurRadius;
     uniform float textureStrength;
+    uniform sampler2D scalesMap;
+    uniform float scalesStrength;
     uniform vec3 lightDir;
 
     varying vec2 vUv;
@@ -167,12 +176,29 @@ const PlasticGradientMaterial = shaderMaterial(
         texColor = mix(texCenter, blurred, k);
       }
       // Si la texture a un alpha ou une luminosité, l'utiliser comme masque,
-      // modulé par textureStrength (0-1) pour la "visibilité" de la texture.
+      // modulé par textureStrength (0-1) pour la "visibilité" de la texture Pike.
       float maskFactor = max(texColor.a, max(texColor.r, max(texColor.g, texColor.b)));
       float kTex = clamp(textureStrength, 0.0, 1.0);
       float blendFactor = maskFactor * kTex;
       if (blendFactor > 0.001) {
         color *= mix(vec3(1.0), texColor.rgb, blendFactor);
+      }
+
+      // Écailles : on applique une deuxième texture en niveaux de gris qui assombrit la couleur
+      // pour donner une impression d'écailles noires / couleur du leurre.
+      float kScales = clamp(scalesStrength, 0.0, 1.0);
+      if (kScales > 0.001) {
+        // On réduit la taille apparente des écailles en multipliant les UV par 3
+        vec2 scalesUv = uvLocal * 3.0;
+        // Rotation de 90° des écailles pour changer leur orientation
+        scalesUv = vec2(-scalesUv.y, scalesUv.x);
+        vec4 sTex = texture2D(scalesMap, scalesUv);
+        float lum = (sTex.r + sTex.g + sTex.b) / 3.0; // 0 = noir, 1 = blanc
+        float sMask = (1.0 - lum) * kScales; // 0 sur fond blanc, 1 sur zones foncées
+        if (sMask > 0.001) {
+          // On tire la couleur du gradient vers le noir dans les zones d'écailles.
+          color = mix(color, vec3(0.0), clamp(sMask, 0.0, 1.0));
+        }
       }
 
       gl_FragColor = vec4(color, 1.0);

@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { LurePret5PaletteControls } from "./PaletteControls";
 
 // Slider avec 2 curseurs (bas / haut) sur une seule barre, utilisé pour le gradient 3 couleurs
@@ -110,10 +110,16 @@ export function CreateLureSidebar({
   setGradientPosition,
   gradientPosition2,
   setGradientPosition2,
+  gradientAngle,
+  setGradientAngle,
   maskType,
   setMaskType,
   color,
   setColor,
+  eyeWhiteColor,
+  setEyeWhiteColor,
+  eyeIrisColor,
+  setEyeIrisColor,
   paletteType,
   setPaletteType,
   selectedTexture,
@@ -126,11 +132,15 @@ export function CreateLureSidebar({
   setTextureBlur,
   textureStrength,
   setTextureStrength,
+  scalesStrength,
+  setScalesStrength,
   error,
   creating,
   onSubmit,
   onLogout,
 }) {
+  const [activeSection, setActiveSection] = useState("triple"); // "triple" | "textures" | "colors"
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -233,117 +243,161 @@ export function CreateLureSidebar({
           </section>
         )}
 
-        {modelType === "LurePret5" && (
-          <LurePret5PaletteControls
-            frontTripleSize={frontTripleSize}
-            setFrontTripleSize={setFrontTripleSize}
-            backPaletteType={backPaletteType}
-            setBackPaletteType={setBackPaletteType}
-            backTripleSize={backTripleSize}
-            setBackTripleSize={setBackTripleSize}
-          />
-        )}
-
-        {/* Panneau textures (choix + angle) */}
+        {/* Bloc accordéon : Triple / Palette */}
         <section className="panel">
-          <h2 className="panel-title">Texture Pike</h2>
-          <div className="texture-list">
-            {[
-              { key: "/textures/Pike-002.png", name: "Pike 1" },
-              { key: "/textures/Pike_003.png", name: "Pike 2" },
-            ].map((tex) => (
-              <button
-                key={tex.key}
-                type="button"
-                className={`texture-item${
-                  selectedTexture === tex.key ? " texture-item--active" : ""
-                }`}
-                onClick={() =>
-                  setSelectedTexture((current) =>
-                    current === tex.key ? null : tex.key,
-                  )
-                }
-              >
-                <div className="texture-thumb texture-thumb--pike" />
-                <div className="texture-meta">
-                  <span className="texture-name">{tex.name}</span>
-                  <span className="texture-tag">
-                    {selectedTexture === tex.key
-                      ? "Utilisée sur le leurre"
-                      : "Cliquer pour appliquer"}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-          <div className="color-picker-row" style={{ marginTop: 12 }}>
-            <span>Angle texture</span>
-            <input
-              type="range"
-              min={-180}
-              max={180}
-              step={1}
-              value={textureRotation}
-              onChange={(e) => setTextureRotation(Number(e.target.value))}
-              style={{ flex: 1 }}
+          <button
+            type="button"
+            className="panel-title panel-title--button"
+            onClick={() => setActiveSection("triple")}
+          >
+            Triple / Palette
+          </button>
+          {activeSection === "triple" && modelType === "LurePret5" && (
+            <LurePret5PaletteControls
+              frontTripleSize={frontTripleSize}
+              setFrontTripleSize={setFrontTripleSize}
+              backPaletteType={backPaletteType}
+              setBackPaletteType={setBackPaletteType}
+              backTripleSize={backTripleSize}
+              setBackTripleSize={setBackTripleSize}
             />
-            <span style={{ width: 48, textAlign: "right" }}>
-              {textureRotation}°
-            </span>
-          </div>
-          <div className="color-picker-row" style={{ marginTop: 8 }}>
-            <span>Taille texture</span>
-            <input
-              type="range"
-              min={0.25}
-              max={4}
-              step={0.05}
-              value={textureScale}
-              onChange={(e) => setTextureScale(Number(e.target.value))}
-              style={{ flex: 1 }}
-            />
-            <span style={{ width: 48, textAlign: "right" }}>
-              x
-              {textureScale.toFixed(2)}
-            </span>
-          </div>
-          <div className="color-picker-row" style={{ marginTop: 8 }}>
-            <span>Visibilité texture</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={textureStrength}
-              onChange={(e) => setTextureStrength(Number(e.target.value))}
-              style={{ flex: 1 }}
-            />
-            <span style={{ width: 48, textAlign: "right" }}>
-              {Math.round(textureStrength * 100)}
-              %
-            </span>
-          </div>
-          <div className="color-picker-row" style={{ marginTop: 8 }}>
-            <span>Flou texture</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={textureBlur}
-              onChange={(e) => setTextureBlur(Number(e.target.value))}
-              style={{ flex: 1 }}
-            />
-            <span style={{ width: 48, textAlign: "right" }}>
-              {Math.round(textureBlur * 100)}
-              %
-            </span>
-          </div>
+          )}
         </section>
 
+        {/* Bloc accordéon : Textures */}
         <section className="panel">
-          <h2 className="panel-title">Couleur du leurre</h2>
-          {modelType === "LurePret5" ||
+          <button
+            type="button"
+            className="panel-title panel-title--button"
+            onClick={() => setActiveSection("textures")}
+          >
+            Textures
+          </button>
+          {activeSection === "textures" && (
+            <>
+              <div className="texture-list">
+                {[
+                  { key: "/textures/Pike-002.png", name: "Pike 1" },
+                  { key: "/textures/Pike_003.png", name: "Pike 2" },
+                ].map((tex) => (
+                  <button
+                    key={tex.key}
+                    type="button"
+                    className={`texture-item${
+                      selectedTexture === tex.key ? " texture-item--active" : ""
+                    }`}
+                    onClick={() =>
+                      setSelectedTexture((current) =>
+                        current === tex.key ? null : tex.key,
+                      )
+                    }
+                  >
+                    <div className="texture-thumb texture-thumb--pike" />
+                    <div className="texture-meta">
+                      <span className="texture-name">{tex.name}</span>
+                      <span className="texture-tag">
+                        {selectedTexture === tex.key
+                          ? "Utilisée sur le leurre"
+                          : "Cliquer pour appliquer"}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="color-picker-row" style={{ marginTop: 12 }}>
+                <span>Angle texture</span>
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  step={1}
+                  value={textureRotation}
+                  onChange={(e) => setTextureRotation(Number(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ width: 48, textAlign: "right" }}>
+                  {textureRotation}°
+                </span>
+              </div>
+              <div className="color-picker-row" style={{ marginTop: 8 }}>
+                <span>Taille texture</span>
+                <input
+                  type="range"
+                  min={0.25}
+                  max={4}
+                  step={0.05}
+                  value={textureScale}
+                  onChange={(e) => setTextureScale(Number(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ width: 48, textAlign: "right" }}>
+                  x
+                  {textureScale.toFixed(2)}
+                </span>
+              </div>
+              <div className="color-picker-row" style={{ marginTop: 8 }}>
+                <span>Visibilité texture</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={textureStrength}
+                  onChange={(e) => setTextureStrength(Number(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ width: 48, textAlign: "right" }}>
+                  {Math.round(textureStrength * 100)}
+                  %
+                </span>
+              </div>
+              <div className="color-picker-row" style={{ marginTop: 8 }}>
+                <span>Flou texture</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={textureBlur}
+                  onChange={(e) => setTextureBlur(Number(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ width: 48, textAlign: "right" }}>
+                  {Math.round(textureBlur * 100)}
+                  %
+                </span>
+              </div>
+              <div className="color-picker-row" style={{ marginTop: 8 }}>
+                <span>Écailles</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={scalesStrength}
+                  onChange={(e) => setScalesStrength(Number(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ width: 48, textAlign: "right" }}>
+                  {Math.round(scalesStrength * 100)}
+                  %
+                </span>
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* Bloc accordéon : Couleurs */}
+        <section className="panel">
+          <button
+            type="button"
+            className="panel-title panel-title--button"
+            onClick={() => setActiveSection("colors")}
+          >
+            Couleurs
+          </button>
+          {activeSection === "colors" &&
+          (modelType === "LurePret5" ||
           modelType === "Lure11" ||
           modelType === "Lure12" ||
           modelType === "Lure13" ||
@@ -356,7 +410,7 @@ export function CreateLureSidebar({
           modelType === "Lure20" ||
           modelType === "Lure21" ||
           modelType === "Lure22" ||
-          modelType === "Lure29" ? (
+          modelType === "Lure29") ? (
             <>
               <div className="color-picker-row">
                 <span>Couleur haut</span>
@@ -427,6 +481,26 @@ export function CreateLureSidebar({
                   />
                 </div>
               </div>
+              <div className="color-picker-row" style={{ marginTop: 8 }}>
+                <span>Angle dégradé</span>
+                <div className="home-type-filters" style={{ flex: 1 }}>
+                  {[0, 45, 90].map((ang) => (
+                    <button
+                      key={ang}
+                      type="button"
+                      className={`home-type-filter-btn${
+                        gradientAngle === ang
+                          ? " home-type-filter-btn--active"
+                          : ""
+                      }`}
+                      onClick={() => setGradientAngle(ang)}
+                    >
+                      {ang}
+                      °
+                    </button>
+                  ))}
+                </div>
+              </div>
               {(modelType === "Lure17" ||
                 modelType === "Lure18" ||
                 modelType === "Lure19" ||
@@ -456,6 +530,27 @@ export function CreateLureSidebar({
                     ))}
                   </div>
                 </div>
+              )}
+              {/* Couleurs des yeux (Blanc / Iris) pour LurePret5 et futurs modèles compatibles */}
+              {modelType === "LurePret5" && (
+                <>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Blanc de l&apos;œil</span>
+                    <input
+                      type="color"
+                      value={eyeWhiteColor}
+                      onChange={(e) => setEyeWhiteColor(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Iris</span>
+                    <input
+                      type="color"
+                      value={eyeIrisColor}
+                      onChange={(e) => setEyeIrisColor(e.target.value)}
+                    />
+                  </div>
+                </>
               )}
             </>
           ) : (

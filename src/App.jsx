@@ -101,6 +101,7 @@ function LureModel({
   gradientCenter = 0.5,
   gradientSmoothness2 = 1,
   gradientCenter2 = 0.66,
+  gradientAngle = 0, // 0, 45, 90 (orientation du dégradé)
   gradientTargetName = null,
   runnerType = null,
   maskType = "none",
@@ -110,17 +111,21 @@ function LureModel({
   textureScale = 1, // échelle U (densité) de la texture
   textureBlur = 0, // 0 = net, 1 = flou
   textureStrength = 1, // 0 = texture invisible, 1 = pleine
+  scalesStrength = 0, // 0 = pas d'écailles, 1 = écailles fortes
   paletteType = null, // ex: "Palette_H", "Palette_M" (depuis Palettes.glb)
   tripleSize = null, // ex: "Triple_#1", "Triple_#2", "Triple_#4", "Triple_#6" (depuis N_Triple_Asset.glb)
   frontTripleSize = null, // pour LurePret5 : taille du triple à l'avant
   backTripleSize = null, // pour LurePret5 : taille du triple à l'arrière
   backPaletteType = null, // pour LurePret5 : Palette_H / M / L à l'arrière
+  eyeWhiteColor = "#ffffff", // couleur de la partie "Blanc" de l'œil (sclère)
+  eyeIrisColor = "#000000", // couleur de la partie "Iris" autour de l'œil
 }) {
   const modelPath = getModelPath(modelType);
   const gltf = useGLTF(modelPath);
   const { scene } = gltf;
   // Charger une texture (même si on ne l'utilise pas toujours) pour respecter les règles des hooks.
   const colorTexture = useTexture(textureUrl || "/textures/Pike-002.png");
+  const scalesTexture = useTexture("/textures/Scales_001.png");
   const hasTexture = !!textureUrl;
   // Fichier commun contenant toutes les palettes disponibles
   // (PalettesV5.glb avec points d'attache Palette_Attach_H/M/L)
@@ -144,6 +149,13 @@ function LureModel({
       colorTexture.wrapS = THREE.RepeatWrapping;
       colorTexture.wrapT = THREE.RepeatWrapping;
       colorTexture.needsUpdate = true;
+    }
+
+    // Configurer également la texture d'écailles pour qu'elle puisse se répéter proprement.
+    if (scalesTexture) {
+      scalesTexture.wrapS = THREE.RepeatWrapping;
+      scalesTexture.wrapT = THREE.RepeatWrapping;
+      scalesTexture.needsUpdate = true;
     }
 
     // Pour LurePret5, on force un dépliage UV "propre" du corps (Cube) quand une texture est active,
@@ -232,25 +244,59 @@ function LureModel({
       scene.userData.loggedMeshes = true;
     }
 
-    // Forcer les yeux en noir et brillants si présents
-    scene.traverse((child) => {
-      if (
-        child.isMesh &&
-        (child.name === "Oeil_Droit" || child.name === "Oeil_Gauche") &&
-        child.material &&
-        child.material.color
-      ) {
-        child.material.color.set("#000000");
+    // Gérer les yeux (Blanc / Iris) avec des couleurs personnalisables
+    const eyeWhite = new THREE.Color(eyeWhiteColor || "#ffffff");
+    const eyeIris = new THREE.Color(eyeIrisColor || "#000000");
 
-        const mat = child.material;
-        if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
-          mat.roughness = 0.05;
-          mat.metalness = 0.9;
-          mat.envMapIntensity = 2.5;
-          if ("clearcoat" in mat) {
-            mat.clearcoat = 1.0;
-            mat.clearcoatRoughness = 0.05;
-          }
+    scene.traverse((child) => {
+      if (!child.isMesh || !child.material || !child.material.color) return;
+
+      const rawName = child.name || "";
+      const rawMatName = child.material.name || "";
+      const name = rawName.toLowerCase();
+      const matName = rawMatName.toLowerCase();
+
+      // Détection assez large des parties d'œil :
+      // - anciens noms : Oeil_Droit / Oeil_Gauche
+      // - nouveaux éléments : "Blanc..." et "Iris..." (objets ou matériaux)
+      const isEyeMesh =
+        rawName === "Oeil_Droit" ||
+        rawName === "Oeil_Gauche" ||
+        name.includes("oeil") ||
+        name.startsWith("blanc") ||
+        name.includes("iris") ||
+        matName.includes("oeil") ||
+        matName.startsWith("blanc") ||
+        matName.includes("iris");
+
+      if (!isEyeMesh) return;
+
+      const isWhitePart =
+        rawName.startsWith("Blanc") ||
+        rawMatName.startsWith("Blanc") ||
+        name.startsWith("blanc");
+
+      const isIrisPart =
+        name.includes("iris") || matName.includes("iris");
+
+      if (isWhitePart) {
+        child.material.color.copy(eyeWhite);
+      } else if (isIrisPart) {
+        child.material.color.copy(eyeIris);
+      } else {
+        // Fallback : si c'est un mesh d'œil mais qu'on ne sait pas si c'est Blanc/Iris,
+        // on applique la couleur de l'iris.
+        child.material.color.copy(eyeIris);
+      }
+
+      const mat = child.material;
+      if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+        mat.roughness = 0.05;
+        mat.metalness = 0.9;
+        mat.envMapIntensity = 2.5;
+        if ("clearcoat" in mat) {
+          mat.clearcoat = 1.0;
+          mat.clearcoatRoughness = 0.05;
         }
       }
     });
@@ -425,14 +471,40 @@ function LureModel({
       const topColor = new THREE.Color(gradientTop);
       const midColor = new THREE.Color(gradientMiddle);
       const bottomColor = new THREE.Color(gradientBottom);
-      const heightMin =
-        typeof scene.userData.gradientHeightMin === "number"
-          ? scene.userData.gradientHeightMin
-          : -0.75;
-      const heightMax =
-        typeof scene.userData.gradientHeightMax === "number"
-          ? scene.userData.gradientHeightMax
-          : 0.75;
+      // Déterminer la direction du gradient en fonction de l'angle choisi
+      // 0°  : vertical (ventre -> dos)  => axe Y
+      // 90° : le long du leurre (tête -> queue) => axe X
+      // 45° : diagonale entre ces deux directions (X+Y)
+      const gradientDir = new THREE.Vector3(0, 1, 0);
+      if (gradientAngle === 90) {
+        gradientDir.set(1, 0, 0);
+      } else if (gradientAngle === 45) {
+        gradientDir.set(1, 1, 0).normalize();
+      }
+
+      // Calculer min/max du gradient en projetant les 8 coins de la bounding box
+      const box = new THREE.Box3().setFromObject(scene);
+      const corners = [
+        new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+        new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+        new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+        new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+        new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+        new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+        new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+        new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+      ];
+      let heightMin = Infinity;
+      let heightMax = -Infinity;
+      corners.forEach((c) => {
+        const proj = c.dot(gradientDir);
+        if (proj < heightMin) heightMin = proj;
+        if (proj > heightMax) heightMax = proj;
+      });
+      if (!Number.isFinite(heightMin) || !Number.isFinite(heightMax)) {
+        heightMin = -0.75;
+        heightMax = 0.75;
+      }
 
       scene.traverse((child) => {
         if (child.isMesh) {
@@ -448,7 +520,7 @@ function LureModel({
             child.material = material;
           }
 
-            if (material.uniforms) {
+          if (material.uniforms) {
             if (material.uniforms.colorA) {
               material.uniforms.colorA.value.copy(topColor);
             }
@@ -481,6 +553,9 @@ function LureModel({
             if (material.uniforms.heightMax) {
               material.uniforms.heightMax.value = heightMax;
             }
+            if (material.uniforms.gradientDir) {
+              material.uniforms.gradientDir.value.copy(gradientDir);
+            }
 
             if (material.uniforms.glossiness) {
               material.uniforms.glossiness.value = 0.9;
@@ -512,6 +587,13 @@ function LureModel({
             }
             if (material.uniforms.textureStrength) {
               material.uniforms.textureStrength.value = textureStrength;
+            }
+            if (material.uniforms.scalesMap) {
+              material.uniforms.scalesMap.value =
+                scalesStrength > 0 ? scalesTexture : null;
+            }
+            if (material.uniforms.scalesStrength) {
+              material.uniforms.scalesStrength.value = scalesStrength;
             }
           }
         }
@@ -622,12 +704,25 @@ function LureModel({
           return;
         }
 
-        // Ne pas recolorer les yeux (ils restent noirs brillants)
-        if (child.name === "Oeil_Droit" || child.name === "Oeil_Gauche") {
+        // Ne pas recolorer les yeux (ils sont gérés séparément : Blanc / Iris)
+        const rawChildName = child.name || "";
+        const rawChildMatName = child.material.name || "";
+        const childNameLower = rawChildName.toLowerCase();
+        const childMatNameLower = rawChildMatName.toLowerCase();
+
+        const isEyeMeshGlobal =
+          rawChildName === "Oeil_Droit" ||
+          rawChildName === "Oeil_Gauche" ||
+          childNameLower.includes("oeil") ||
+          childNameLower.startsWith("blanc") ||
+          childNameLower.includes("iris") ||
+          childMatNameLower.includes("oeil") ||
+          childMatNameLower.startsWith("blanc") ||
+          childMatNameLower.includes("iris");
+
+        if (isEyeMeshGlobal) {
           return;
         }
-
-        // Ne pas recolorer les yeux (ils restent noirs brillants)
 
         // Couleur de base du corps du leurre
         child.material.color.copy(targetColor);
@@ -765,6 +860,7 @@ function LureModel({
     gradientCenter,
     gradientSmoothness2,
     gradientCenter2,
+    gradientAngle,
     gradientTargetName,
     runnerType,
     maskType,
@@ -774,6 +870,8 @@ function LureModel({
     textureRotation,
     textureScale,
     textureBlur,
+    scalesStrength,
+    scalesTexture,
     textureStrength,
     palettesGltf,
     paletteType,
@@ -782,6 +880,8 @@ function LureModel({
     tripleSize,
     frontTripleSize,
     backTripleSize,
+    eyeWhiteColor,
+    eyeIrisColor,
   ]);
 
   // DEBUG texture / matériaux : liste les meshes avec info UV / texture
@@ -1080,6 +1180,7 @@ function CreateLurePage() {
   const [gradientPosition, setGradientPosition] = useState(33); // 0-100, 0=bas, 100=haut (frontière haut/milieu)
   const [gradientStrength2, setGradientStrength2] = useState(100); // 0-100 (milieu/bas)
   const [gradientPosition2, setGradientPosition2] = useState(66); // 0-100 (frontière milieu/bas)
+  const [gradientAngle, setGradientAngle] = useState(0); // 0, 45, 90
   const [runnerType, setRunnerType] = useState("SlallowRunner");
   const [maskType, setMaskType] = useState("none"); // "none" | "pike" | "card"
   const [collectionType, setCollectionType] = useState("Palette"); // pour Lure25/26/27/28 : "Palette" | "Hoo_B"
@@ -1089,6 +1190,7 @@ function CreateLurePage() {
   const [textureScale, setTextureScale] = useState(1); // échelle U (densité)
   const [textureBlur, setTextureBlur] = useState(0); // 0-1 (force du flou)
   const [textureStrength, setTextureStrength] = useState(1); // 0-1 (visibilité de la texture)
+  const [scalesStrength, setScalesStrength] = useState(0); // 0-1 (intensité des écailles)
   const [paletteType, setPaletteType] = useState("Palette_H"); // palettes générales (avant)
   const [tripleSize, setTripleSize] = useState("Triple_#4"); // taille du triple à attacher (LurePret5 front/back)
   // Pour LurePret2 : tailles indépendantes pour l'attache avant / arrière.
@@ -1096,6 +1198,8 @@ function CreateLurePage() {
   const [frontTripleSize, setFrontTripleSize] = useState(null);
   const [backTripleSize, setBackTripleSize] = useState(null);
   const [backPaletteType, setBackPaletteType] = useState(null); // "Palette_H" | "Palette_M" | "Palette_L" | null
+  const [eyeWhiteColor, setEyeWhiteColor] = useState("#ffffff");
+  const [eyeIrisColor, setEyeIrisColor] = useState("#000000");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   // Colonne gauche "à la Figma"
@@ -1383,6 +1487,24 @@ function CreateLurePage() {
                     %
                   </span>
                 </div>
+                <div className="color-picker-row" style={{ marginTop: 8 }}>
+                  <span>Écailles</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={scalesStrength}
+                    onChange={(e) =>
+                      setScalesStrength(Number(e.target.value))
+                    }
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ width: 48, textAlign: "right" }}>
+                    {Math.round(scalesStrength * 100)}
+                    %
+                  </span>
+                </div>
               </div>
             )}
 
@@ -1458,6 +1580,7 @@ function CreateLurePage() {
               gradientBottom={gradientBottom}
               gradientSmoothness={gradientStrength / 100}
               gradientCenter={gradientPosition / 100}
+              gradientAngle={gradientAngle}
               // On garde toujours un minimum de douceur pour que le bas reste visible,
               // même quand le slider est à 0.
               gradientSmoothness2={gradientStrength2 / 100}
@@ -1495,6 +1618,7 @@ function CreateLurePage() {
               textureScale={textureScale}
               textureBlur={textureBlur}
               textureStrength={textureStrength}
+              scalesStrength={scalesStrength}
               paletteType={modelType === "CollectionTest" ? paletteType : null}
               tripleSize={modelType === "Lurepret" ? tripleSize : null}
               frontTripleSize={
@@ -1508,6 +1632,8 @@ function CreateLurePage() {
                   : null
               }
               backPaletteType={modelType === "LurePret5" ? backPaletteType : null}
+              eyeWhiteColor={eyeWhiteColor}
+              eyeIrisColor={eyeIrisColor}
             />
             <OrbitControls
               enablePan={false}
@@ -1546,10 +1672,16 @@ function CreateLurePage() {
           setGradientPosition={setGradientPosition}
           gradientPosition2={gradientPosition2}
           setGradientPosition2={setGradientPosition2}
+          gradientAngle={gradientAngle}
+          setGradientAngle={setGradientAngle}
           maskType={maskType}
           setMaskType={setMaskType}
           color={color}
           setColor={setColor}
+          eyeWhiteColor={eyeWhiteColor}
+          setEyeWhiteColor={setEyeWhiteColor}
+          eyeIrisColor={eyeIrisColor}
+          setEyeIrisColor={setEyeIrisColor}
           paletteType={paletteType}
           setPaletteType={setPaletteType}
           selectedTexture={selectedTexture}
@@ -1562,6 +1694,8 @@ function CreateLurePage() {
           setTextureBlur={setTextureBlur}
           textureStrength={textureStrength}
           setTextureStrength={setTextureStrength}
+          scalesStrength={scalesStrength}
+          setScalesStrength={setScalesStrength}
           error={error}
           creating={creating}
           onSubmit={handleSubmit}
