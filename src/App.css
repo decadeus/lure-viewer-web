@@ -65,6 +65,104 @@
   gap: 16px;
   box-shadow: -12px 0 30px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(10px);
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* Mise en page principale de la sidebar : icônes à gauche, contenu à droite */
+.sidebar-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1; /* occupe toute la hauteur dispo de la sidebar */
+}
+
+/* Colonne d'icônes façon Blender */
+.sidebar-toolstrip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  background: #020617;
+  border: 1px solid #111827;
+  box-shadow: inset -1px 0 0 rgba(15, 23, 42, 0.9);
+}
+
+.sidebar-tool-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #1f2937;
+  background: #030712;
+  color: #9ca3af;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sidebar-tool-btn--active {
+  background: #22c55e;
+  color: #022c22;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.6);
+}
+
+.sidebar-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 2px;
+  min-height: 0;
+}
+
+.sidebar-save-btn {
+  margin-top: auto; /* pousse le bouton tout en bas de la colonne de droite */
+}
+
+/* Finesse typographique pour un look plus \"pro\" façon Blender */
+.panel {
+  font-size: 0.8rem;
+}
+
+.panel-title {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+}
+
+.color-picker-row {
+  font-size: 0.78rem;
+}
+
+/* Colonne d'icônes façon Blender dans la sidebar */
+.sidebar-toolstrip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-tool-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #1f2937;
+  background: #020617;
+  color: #e5e7eb;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sidebar-tool-btn--active {
+  background: #22c55e;
+  color: #022c22;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.6);
 }
 
 .sidebar-header {
