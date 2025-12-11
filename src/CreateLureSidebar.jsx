@@ -137,6 +137,8 @@ export function CreateLureSidebar({
   setTextureStrength,
   scalesStrength,
   setScalesStrength,
+  showAxes,
+  setShowAxes,
   error,
   creating,
   onSubmit,
@@ -592,6 +594,23 @@ export function CreateLureSidebar({
               {error}
             </p>
           )}
+        </section>
+
+        {/* Bloc affichage : options de visualisation */}
+        <section className="panel" style={{ marginTop: 12 }}>
+          <h2 className="panel-title">Affichage</h2>
+          <div className="color-picker-row">
+            <span>Axes 3D (X/Y/Z)</span>
+            <button
+              type="button"
+              className={`home-type-filter-btn${
+                showAxes ? " home-type-filter-btn--active" : ""
+              }`}
+              onClick={() => setShowAxes(!showAxes)}
+            >
+              {showAxes ? "Masquer" : "Afficher"}
+            </button>
+          </div>
         </section>
 
         {/* Section spécifique : Yeux */}
