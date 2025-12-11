@@ -250,6 +250,12 @@
   overflow: auto;
 }
 
+.editor-sidebar-footer {
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid #1f2937;
+}
+
 .editor-sidebar-placeholder {
   margin: 0;
   font-size: 0.78rem;
@@ -543,11 +549,17 @@
 
 .color-picker-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   font-size: 0.8rem;
   color: #9ca3af;
+}
+
+.color-picker-row + .color-picker-row {
+  border-top: 1px solid #1f2937;
+  padding-top: 8px;
+  margin-top: 8px;
 }
 
 .color-picker-row input[type="color"] {
@@ -555,12 +567,12 @@
   appearance: none;
   border: none;
   padding: 0;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
   background: none;
   cursor: pointer;
-  box-shadow: 0 0 0 1px #111827, 0 0 0 3px #020617;
+  box-shadow: 0 0 0 1px #111827, 0 0 0 2px #020617;
 }
 
 .color-picker-row input[type="color"]::-webkit-color-swatch {

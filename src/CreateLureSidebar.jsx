@@ -146,44 +146,13 @@ export function CreateLureSidebar({
 }) {
   // Sous-accordéons internes pour certains onglets
   const [activeSection, setActiveSection] = useState("triple");
-  // Onglet de la colonne d'icônes (Triple / Textures / Couleurs / Yeux / Affichage)
-  const [activeToolTab, setActiveToolTab] = useState("triple");
+  // Onglet de la colonne d'icônes (Taille / Triple / Textures / Couleurs / Yeux / Affichage)
+  const [activeToolTab, setActiveToolTab] = useState("size");
 
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div>
-          <h1 className="app-title">Nouveau leurre</h1>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {user ? (
-            <div className="user-chip">
-              <span className="user-email">{user.email}</span>
-              <button
-                type="button"
-                className="user-logout-btn"
-                onClick={onLogout}
-              >
-                Déconnexion
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="secondary-btn"
-              onClick={() => navigate("/auth")}
-            >
-              Se connecter
-            </button>
-          )}
-          <button
-            type="button"
-            className="secondary-btn"
-            onClick={() => navigate("/")}
-          >
-            Retour à la liste
-          </button>
-        </div>
+        <h1 className="app-title">Nouveau leurre</h1>
       </div>
 
       {/* Bouton Sauvegarder juste sous l'en-tête */}
@@ -201,6 +170,7 @@ export function CreateLureSidebar({
         {/* Colonne d'icônes verticale façon Blender */}
         <div className="sidebar-toolstrip">
           {[
+            { key: "size", label: "Taille du leurre", icon: "Ta" },
             { key: "triple", label: "Triple / Palette", icon: "T" },
             { key: "textures", label: "Textures", icon: "Tx" },
             { key: "colors", label: "Couleurs", icon: "C" },
@@ -227,110 +197,94 @@ export function CreateLureSidebar({
           onSubmit={onSubmit}
           className="sidebar-content"
         >
-          {/* Type de leurre */}
-          <section className="panel" style={{ marginBottom: 12 }}>
-            <h2 className="panel-title">Type de leurre</h2>
-            <div className="color-picker-row">
-              <span>Modèle</span>
-              <select
-                value={modelType}
-                onChange={(e) => setModelType(e.target.value)}
-                style={{ flex: 1, padding: "6px 8px" }}
-              >
-                {["LurePret5"].map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="color-picker-row" style={{ marginTop: 8 }}>
-              <span>Taille</span>
-              <div className="home-type-filters" style={{ flex: 1 }}>
-                {[
-                  { key: "M", label: "M" },
-                  { key: "L", label: "L" },
-                  { key: "XL", label: "XL" },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    className={`home-type-filter-btn${
-                      lureSize === opt.key
-                        ? " home-type-filter-btn--active"
-                        : ""
-                    }`}
-                    onClick={() => setLureSize(opt.key)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
+          {/* Onglet Taille du leurre (taille, type de nage, collection) */}
+          {activeToolTab === "size" && (
+            <>
+              <section className="panel" style={{ marginBottom: 12 }}>
+                <h2 className="panel-title">Taille du leurre</h2>
+                <div className="color-picker-row">
+                  <span>Taille</span>
+                  <div className="home-type-filters" style={{ flex: 1 }}>
+                    {[
+                      { key: "M", label: "M" },
+                      { key: "L", label: "L" },
+                      { key: "XL", label: "XL" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        className={`home-type-filter-btn${
+                          lureSize === opt.key
+                            ? " home-type-filter-btn--active"
+                            : ""
+                        }`}
+                        onClick={() => setLureSize(opt.key)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </section>
 
-          {/* Type de nage pour d'autres modèles (garde la logique existante) */}
-          {modelType !== "LurePret5" && (
-            <section className="panel" style={{ marginBottom: 12 }}>
-              <h2 className="panel-title">Type de nage</h2>
-              <div className="home-type-filters">
-                {["SlallowRunner", "MediumRunner", "DeepRunner"].map(
-                  (type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      className={`home-type-filter-btn${
-                        runnerType === type
-                          ? " home-type-filter-btn--active"
-                          : ""
-                      }`}
-                      onClick={() => setRunnerType(type)}
-                    >
-                      {type}
-                    </button>
-                  ),
-                )}
-              </div>
-            </section>
-          )}
+              {/* Type de nage pour d'autres modèles (garde la logique existante) */}
+              {modelType !== "LurePret5" && (
+                <section className="panel" style={{ marginBottom: 12 }}>
+                  <h2 className="panel-title">Type de nage</h2>
+                  <div className="home-type-filters">
+                    {["SlallowRunner", "MediumRunner", "DeepRunner"].map(
+                      (type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className={`home-type-filter-btn${
+                            runnerType === type
+                              ? " home-type-filter-btn--active"
+                              : ""
+                          }`}
+                          onClick={() => setRunnerType(type)}
+                        >
+                          {type}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </section>
+              )}
 
-          {/* Anciennes collections Lure25-29 désactivées pour le moment */}
-          {false && (
-            <section className="panel">
-              <h2 className="panel-title">Collection (Palette / Hoo_B)</h2>
-              <div className="home-type-filters">
-                {[
-                  { key: "Palette", label: "Palette" },
-                  { key: "Hoo_B", label: "Hoo_B" },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    className={`home-type-filter-btn${
-                      collectionType === opt.key
-                        ? " home-type-filter-btn--active"
-                        : ""
-                    }`}
-                    onClick={() => setCollectionType(opt.key)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </section>
+              {/* Anciennes collections Lure25-29 désactivées pour le moment */}
+              {false && (
+                <section className="panel">
+                  <h2 className="panel-title">Collection (Palette / Hoo_B)</h2>
+                  <div className="home-type-filters">
+                    {[
+                      { key: "Palette", label: "Palette" },
+                      { key: "Hoo_B", label: "Hoo_B" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        className={`home-type-filter-btn${
+                          collectionType === opt.key
+                            ? " home-type-filter-btn--active"
+                            : ""
+                        }`}
+                        onClick={() => setCollectionType(opt.key)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
           )}
 
           {/* Onglet Triple / Palette */}
           {activeToolTab === "triple" && (
             <section className="panel">
-              <button
-                type="button"
-                className="panel-title panel-title--button"
-                onClick={() => setActiveSection("triple")}
-              >
-                Triple / Palette
-              </button>
-              {activeSection === "triple" && modelType === "LurePret5" && (
+              <h2 className="panel-title">Triple / Palette</h2>
+              {modelType === "LurePret5" && (
                 <LurePret5PaletteControls
                   frontTripleSize={frontTripleSize}
                   setFrontTripleSize={setFrontTripleSize}
@@ -346,14 +300,7 @@ export function CreateLureSidebar({
           {/* Onglet Textures */}
           {activeToolTab === "textures" && (
             <section className="panel">
-              <button
-                type="button"
-                className="panel-title panel-title--button"
-                onClick={() => setActiveSection("textures")}
-              >
-                Textures
-              </button>
-              {activeSection === "textures" && (
+              <h2 className="panel-title">Textures</h2>
                 <>
                   <div className="texture-list">
                     {[
@@ -469,22 +416,14 @@ export function CreateLureSidebar({
                     </span>
                   </div>
                 </>
-              )}
             </section>
           )}
 
           {/* Onglet Couleurs */}
           {activeToolTab === "colors" && (
             <section className="panel">
-              <button
-                type="button"
-                className="panel-title panel-title--button"
-                onClick={() => setActiveSection("colors")}
-              >
-                Couleurs
-              </button>
-              {activeSection === "colors" &&
-              (modelType === "LurePret5" ||
+              <h2 className="panel-title">Couleurs</h2>
+              {(modelType === "LurePret5" ||
                 modelType === "Lure11" ||
                 modelType === "Lure12" ||
                 modelType === "Lure13" ||
@@ -499,8 +438,122 @@ export function CreateLureSidebar({
                 modelType === "Lure22" ||
                 modelType === "Lure29") ? (
                 <>
-                  {/* (garde ici ton bloc complet de réglages de dégradé) */}
-                  {/* ... */}
+                  <div className="color-picker-row">
+                    <span>Couleur haut</span>
+                    <input
+                      type="color"
+                      value={gradientTop}
+                      onChange={(e) => setGradientTop(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row">
+                    <span>Couleur milieu</span>
+                    <input
+                      type="color"
+                      value={gradientMiddle}
+                      onChange={(e) => setGradientMiddle(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row">
+                    <span>Couleur bas</span>
+                    <input
+                      type="color"
+                      value={gradientBottom}
+                      onChange={(e) => setGradientBottom(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 12 }}>
+                    <span>Degré dégradé haut</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={gradientStrength}
+                      onChange={(e) => setGradientStrength(Number(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ width: 40, textAlign: "right" }}>
+                      {gradientStrength}
+                    </span>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Degré dégradé bas</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={gradientStrength2}
+                      onChange={(e) => setGradientStrength2(Number(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ width: 40, textAlign: "right" }}>
+                      {gradientStrength2}
+                    </span>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Positions B / H</span>
+                    <div style={{ flex: 1 }}>
+                      <DualPositionSlider
+                        valueLow={gradientPosition2}
+                        valueHigh={gradientPosition}
+                        onChange={(low, high) => {
+                          setGradientPosition2(low);
+                          setGradientPosition(high);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Angle dégradé</span>
+                    <div className="home-type-filters" style={{ flex: 1 }}>
+                      {[0, 45, 90].map((ang) => (
+                        <button
+                          key={ang}
+                          type="button"
+                          className={`home-type-filter-btn${
+                            gradientAngle === ang
+                              ? " home-type-filter-btn--active"
+                              : ""
+                          }`}
+                          onClick={() => setGradientAngle(ang)}
+                        >
+                          {ang}°
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {(modelType === "Lure17" ||
+                    modelType === "Lure18" ||
+                    modelType === "Lure19" ||
+                    modelType === "Lure20" ||
+                    modelType === "Lure21" ||
+                    modelType === "Lure22") && (
+                    <div className="color-picker-row" style={{ marginTop: 8 }}>
+                      <span>Mask</span>
+                      <div className="home-type-filters" style={{ flex: 1 }}>
+                        {[
+                          { key: "none", label: "Aucun" },
+                          { key: "pike", label: "Pike" },
+                          { key: "card", label: "Points" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            className={`home-type-filter-btn${
+                              maskType === opt.key
+                                ? " home-type-filter-btn--active"
+                                : ""
+                            }`}
+                            onClick={() => setMaskType(opt.key)}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="color-picker-row">

@@ -1619,6 +1619,39 @@ function CreateLurePage() {
               </div>
             )}
           </div>
+
+          {/* Bouton retour + email / compte utilisateur tout en bas de la colonne gauche */}
+          <div className="editor-sidebar-footer">
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => navigate("/")}
+              style={{ width: "100%", marginBottom: 8 }}
+            >
+              Retour à la liste
+            </button>
+            {user ? (
+              <div className="user-chip">
+                <span className="user-email">{user.email}</span>
+                <button
+                  type="button"
+                  className="user-logout-btn"
+                  onClick={() => supabase.auth.signOut()}
+                >
+                  Déconnexion
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => navigate("/auth")}
+                style={{ width: "100%" }}
+              >
+                Se connecter
+              </button>
+            )}
+          </div>
         </aside>
 
         <div className="viewer-container">
