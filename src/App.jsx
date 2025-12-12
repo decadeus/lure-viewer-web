@@ -1426,6 +1426,10 @@ function CreateLurePage() {
 
   const [activeLocalLureId, setActiveLocalLureId] = useState(null);
 
+  // Popup custom pour choisir entre Modifier / Nouveau
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [pendingLocalSave, setPendingLocalSave] = useState(null); // { previewUrl, baseEntry }
+
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -1481,37 +1485,12 @@ function CreateLurePage() {
       lureSize,
     };
 
-    // Sauvegarde locale (toujours disponible, même sans connexion)
+    // Si un leurre local est sélectionné, ouvrir un popup custom pour choisir l'action
     if (activeLocalLureId) {
-      // Demander si on met à jour ou si on crée un nouveau leurre
-      const update = window.confirm(
-        "Mettre à jour le leurre sélectionné ?\nClique sur Annuler pour créer un nouveau leurre.",
-      );
-      if (update) {
-        setLocalLures((prev) =>
-          prev.map((lure) =>
-            lure.id === activeLocalLureId
-              ? {
-                  ...lure,
-                  ...baseEntry,
-                  // on garde la date d'origine, mais on met à jour la vignette si on en a une nouvelle
-                  previewUrl: previewUrl || lure.previewUrl || null,
-                }
-              : lure,
-          ),
-        );
-      } else {
-        const localId = `local-${now.getTime()}`;
-        const localEntry = {
-          id: localId,
-          created_at: now.toISOString(),
-          previewUrl,
-          ...baseEntry,
-        };
-        setLocalLures((prev) => [localEntry, ...prev]);
-        setActiveLocalLureId(localId);
-      }
+      setPendingLocalSave({ previewUrl, baseEntry, createdAt: now.toISOString() });
+      setSaveDialogOpen(true);
     } else {
+      // Sauvegarde locale simple (nouveau leurre)
       const localId = `local-${now.getTime()}`;
       const localEntry = {
         id: localId,
@@ -1648,7 +1627,7 @@ function CreateLurePage() {
                     configuration en local.
                   </p>
                 ) : (
-                  <div className="model-list">
+                  <div className="model-list model-list--grid">
                     {localLures.map((lure) => (
                       <div
                         key={lure.id}
@@ -2126,6 +2105,81 @@ function CreateLurePage() {
             )}
           </div>
         </aside>
+
+        {/* Popup de sauvegarde locale (Modifier / Nouveau / Annuler) */}
+        {saveDialogOpen && pendingLocalSave && (
+          <div className="save-dialog-backdrop">
+            <div className="save-dialog">
+              <p className="save-dialog-text">
+                Que veux-tu faire avec ce leurre ?
+              </p>
+              <p className="save-dialog-subtext">
+                <strong>Modifier</strong> met à jour le leurre sélectionné.{" "}
+                <strong>Nouveau</strong> crée un autre leurre à partir de ces
+                réglages.
+              </p>
+              <div className="save-dialog-actions">
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => {
+                    setSaveDialogOpen(false);
+                    setPendingLocalSave(null);
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => {
+                    // Créer un nouveau leurre local
+                    const now = new Date();
+                    const localId = `local-${now.getTime()}`;
+                    const localEntry = {
+                      id: localId,
+                      created_at:
+                        pendingLocalSave.createdAt || now.toISOString(),
+                      previewUrl: pendingLocalSave.previewUrl || null,
+                      ...pendingLocalSave.baseEntry,
+                    };
+                    setLocalLures((prev) => [localEntry, ...prev]);
+                    setActiveLocalLureId(localId);
+                    setSaveDialogOpen(false);
+                    setPendingLocalSave(null);
+                  }}
+                >
+                  Nouveau
+                </button>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={() => {
+                    // Mettre à jour le leurre sélectionné
+                    setLocalLures((prev) =>
+                      prev.map((lure) =>
+                        lure.id === activeLocalLureId
+                          ? {
+                              ...lure,
+                              ...pendingLocalSave.baseEntry,
+                              previewUrl:
+                                pendingLocalSave.previewUrl ||
+                                lure.previewUrl ||
+                                null,
+                            }
+                          : lure,
+                      ),
+                    );
+                    setSaveDialogOpen(false);
+                    setPendingLocalSave(null);
+                  }}
+                >
+                  Modifier
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="viewer-container">
           <Canvas
