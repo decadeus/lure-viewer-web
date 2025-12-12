@@ -465,6 +465,23 @@
     box-shadow 120ms ease-out;
 }
 
+.model-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #020617;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px #111827;
+}
+
+.model-thumb--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
 .model-item--active {
   background: rgba(34, 197, 94, 0.12);
   border-color: #22c55e;
@@ -1038,11 +1055,7 @@
 }
 
 .user-email {
-  max-width: 160px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #e5e7eb;
+  display: none; /* masqué temporairement */
 }
 
 .user-logout-btn {

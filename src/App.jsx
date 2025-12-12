@@ -28,6 +28,13 @@ function getModelPath(modelType) {
   switch (modelType) {
     case "LurePret5":
       return "/models/LurePret7.glb";
+    case "LureDouble":
+      return "/models/LureDouble.glb";
+    case "Shad":
+      return "/models/Shad.glb";
+    case "Shad2":
+      // Shad2 utilise désormais le fichier Shad5.glb (modèle final avec shade smooth + attaches RM*/RL*)
+      return "/models/Shad5.glb";
     default:
       // Fallback : tous les anciens modèles pointent maintenant sur LurePret7
       return "/models/LurePret7.glb";
@@ -101,6 +108,8 @@ function ensureGeometryUVsForce(geometry) {
 
 function LureModel({
   modelType,
+  // Optionnel : URL complète d'un modèle glb importé en local (blob: ou file:)
+  modelUrl = null,
   color,
   useGradient = false,
   gradientTop = "#ff5500",
@@ -123,15 +132,15 @@ function LureModel({
   scalesStrength = 0, // 0 = pas d'écailles, 1 = écailles fortes
   paletteType = null, // ex: "Palette_H", "Palette_M" (depuis Palettes.glb)
   tripleSize = null, // ex: "Triple_#1", "Triple_#2", "Triple_#4", "Triple_#6" (depuis N_Triple_Asset.glb)
-  frontTripleSize = null, // pour LurePret5 : taille du triple à l'avant
-  backTripleSize = null, // pour LurePret5 : taille du triple à l'arrière
+  frontTripleSize = null, // pour LurePret5 / Shad : taille du triple à l'avant
+  backTripleSize = null, // pour LurePret5 / Shad : taille du triple à l'arrière
   backPaletteType = null, // pour LurePret5 : Palette_H / M / L à l'arrière
   eyeWhiteColor = "#ffffff", // couleur de la partie "Blanc" de l'œil (sclère)
   eyeIrisColor = "#000000", // couleur de la partie "Iris" autour de l'œil
   lureSize = "M", // \"M\" (base), \"L\" (x1.25), \"XL\" (x1.5)
   onComputedDimensionsCm = null,
 }) {
-  const modelPath = getModelPath(modelType);
+  const modelPath = modelUrl || getModelPath(modelType);
   const gltf = useGLTF(modelPath);
   const { scene } = gltf;
   // Charger une texture (même si on ne l'utilise pas toujours) pour respecter les règles des hooks.
@@ -143,8 +152,10 @@ function LureModel({
   const palettesGltf = useGLTF("/Palettes/PalettesV5.glb");
   // Accessoire Triple (N_Triple_Asset.glb) pour certains leurres (plusieurs tailles)
   const tripleGltf = useGLTF("/Triple/N_Triple_Asset.glb");
-  // Modèle de référence contenant le cube Taille_M pour la calibration des cm
+  // Modèles de référence pour la calibration des cm
   const referenceGltf = useGLTF("/models/LurePret8.glb");
+  const doubleRefGltf = useGLTF("/models/LureDouble.glb");
+  const shadRefGltf = useGLTF("/models/Shad2.glb");
 
   useEffect(() => {
     // DEBUG: vérifier que le bon modèle est bien utilisé
@@ -201,14 +212,55 @@ function LureModel({
     //   );
     // }
 
-    // 1) Calibration unités 3D -> centimètres via le cube Taille_M
-    if (!scene.userData.cmPerWorldUnit && referenceGltf?.scene) {
-      const refCube = referenceGltf.scene.getObjectByName("Taille_M");
+    // 1) Calibration unités 3D -> centimètres via un cube de référence
+    if (!scene.userData.cmPerWorldUnit) {
+      let refCube = null;
+      let refLengthCm = 4.0; // valeur par défaut
+
+      // Cas particulier : LureDouble possède ses propres cubes de référence
+      if (modelType === "LureDouble" && doubleRefGltf?.scene) {
+        const wantedName = lureSize === "L" ? "Taille_L" : "Taille_M";
+        refCube =
+          doubleRefGltf.scene.getObjectByName(wantedName) ||
+          doubleRefGltf.scene.getObjectByName("Taille_M") ||
+          doubleRefGltf.scene.getObjectByName("Taille_L");
+        // Pour LureDouble, chaque cube de ref correspond à ~4 cm
+        refLengthCm = 4.0;
+      }
+
+      // Cas particulier : Shad / Shad2 utilisent Shad2.glb avec Ref_M (4.0 cm) et Ref_L (4.51 cm)
+      if (
+        !refCube &&
+        (modelType === "Shad" || modelType === "Shad2") &&
+        shadRefGltf?.scene
+      ) {
+        const cubeM = shadRefGltf.scene.getObjectByName("Ref_M");
+        const cubeL = shadRefGltf.scene.getObjectByName("Ref_L");
+
+        if (lureSize === "L" && cubeL) {
+          refCube = cubeL;
+          refLengthCm = 4.51;
+        } else if (lureSize === "M" && cubeM) {
+          refCube = cubeM;
+          refLengthCm = 4.0;
+        } else if (cubeM) {
+          refCube = cubeM;
+          refLengthCm = 4.0;
+        } else if (cubeL) {
+          refCube = cubeL;
+          refLengthCm = 4.51;
+        }
+      }
+
+      // Fallback : cube Taille_M du modèle de référence LurePret8
+      if (!refCube && referenceGltf?.scene) {
+        refCube = referenceGltf.scene.getObjectByName("Taille_M");
+      }
+
       if (refCube) {
         const refBox = new THREE.Box3().setFromObject(refCube);
         const refSize = refBox.getSize(new THREE.Vector3());
         const refLengthUnits = Math.abs(refSize.x) || 1;
-        const refLengthCm = 4.0; // Taille_M correspond à ~4 cm réels (40 cm / x10)
         scene.userData.cmPerWorldUnit = refLengthCm / refLengthUnits;
       }
     }
@@ -274,6 +326,19 @@ function LureModel({
           worldPerCm,
         });
       }
+    }
+
+    // 4) Shad / Shad2 : n'afficher que les attaches correspondant à la taille du leurre
+    // - taille M  -> Attach_MF / Attach_MB visibles, Attach_LF / Attach_LB masqués
+    // - taille L  -> Attach_LF / Attach_LB visibles, Attach_MF / Attach_MB masqués
+    if (modelType === "Shad" || modelType === "Shad2") {
+      const isLarge = lureSize === "L";
+      const keepPrefix = isLarge ? "Attach_L" : "Attach_M";
+      ["Attach_MF", "Attach_MB", "Attach_LF", "Attach_LB"].forEach((name) => {
+        const obj = scene.getObjectByName(name);
+        if (!obj) return;
+        obj.visible = name.startsWith(keepPrefix);
+      });
     }
 
   // Pour certains modèles (LurePret5), on force un
@@ -887,9 +952,14 @@ function LureModel({
     }
 
     // Attache dynamique du Triple (N_Triple_Asset.glb) via les repères.
-    if (modelType === "LurePret5") {
-      // Nettoyer les éventuels triples présents sur les deux points d'attache
-      ["Attach_Down_add", "Attach_Back_Add"].forEach((name) => {
+    if (modelType === "LurePret5" || modelType === "Shad" || modelType === "Shad2") {
+      // Nettoyer les éventuels triples présents sur les points d'attache concernés
+      const tripleSockets =
+        modelType === "LurePret5"
+          ? ["Attach_Down_add", "Attach_Back_Add"]
+          : ["Attach_MF", "Attach_MB", "Attach_LF", "Attach_LB"];
+
+      tripleSockets.forEach((name) => {
         const sock = scene.getObjectByName(name);
         if (sock) {
           sock.children
@@ -902,24 +972,50 @@ function LureModel({
         }
       });
 
-      if (frontTripleSize) {
-        attachTripleToLure({
-          scene,
-          tripleGltf,
-          tripleSize: frontTripleSize,
-          socketName: "Attach_Down_add",
-          lureScale: sizeScale,
-        });
-      }
-      // À l'arrière, on choisit soit un triple, soit une palette (backPaletteType)
-      if (backTripleSize && !backPaletteType) {
-        attachTripleToLure({
-          scene,
-          tripleGltf,
-          tripleSize: backTripleSize,
-          socketName: "Attach_Back_Add",
-          lureScale: sizeScale,
-        });
+      if (modelType === "LurePret5") {
+        if (frontTripleSize) {
+          attachTripleToLure({
+            scene,
+            tripleGltf,
+            tripleSize: frontTripleSize,
+            socketName: "Attach_Down_add",
+            lureScale: sizeScale,
+          });
+        }
+        // À l'arrière, on choisit soit un triple, soit une palette (backPaletteType)
+        if (backTripleSize && !backPaletteType) {
+          attachTripleToLure({
+            scene,
+            tripleGltf,
+            tripleSize: backTripleSize,
+            socketName: "Attach_Back_Add",
+            lureScale: sizeScale,
+          });
+        }
+      } else {
+        // Shad / Shad2 : utiliser les attaches spécifiques M/L avant / arrière
+        const useLarge = lureSize === "L";
+        const frontSocket = useLarge ? "Attach_LF" : "Attach_MF";
+        const backSocket = useLarge ? "Attach_LB" : "Attach_MB";
+
+        if (frontTripleSize) {
+          attachTripleToLure({
+            scene,
+            tripleGltf,
+            tripleSize: frontTripleSize,
+            socketName: frontSocket,
+            lureScale: sizeScale,
+          });
+        }
+        if (backTripleSize) {
+          attachTripleToLure({
+            scene,
+            tripleGltf,
+            tripleSize: backTripleSize,
+            socketName: backSocket,
+            lureScale: sizeScale,
+          });
+        }
       }
     }
   }, [
@@ -1285,9 +1381,15 @@ function CreateLurePage() {
   // - assetsView: "root" => liste des bibliothèques, ou "textures" / "models" pour le détail
   const [leftMainTab, setLeftMainTab] = useState("file"); // "file" | "assets"
   const [assetsView, setAssetsView] = useState("root"); // "root" | "textures" | "models"
+  // Modèles GLB importés localement (non sauvegardés sur le serveur)
+  const [localModels, setLocalModels] = useState([]);
+  const [selectedLocalModelId, setSelectedLocalModelId] = useState(null);
   const glRef = useRef(null);
   const [currentDimensionsCm, setCurrentDimensionsCm] = useState(null);
   const [showAxes, setShowAxes] = useState(false);
+
+  const selectedLocalModel =
+    localModels.find((m) => m.id === selectedLocalModelId) || null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1600,22 +1702,161 @@ function CreateLurePage() {
                   </button>
                   <span className="assets-section-title">Modèles</span>
                 </div>
-                <div className="model-list">
-                  {["LurePret5"].map(
-                    (type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        className={`model-item${
-                          modelType === type ? " model-item--active" : ""
-                        }`}
-                        onClick={() => setModelType(type)}
-                      >
-                        <span className="model-name">{type}</span>
-                      </button>
-                    ),
-                  )}
+                {/* Import local de modèles GLB */}
+                <div style={{ marginBottom: 8 }}>
+                  <label
+                    className="secondary-btn"
+                    style={{
+                      width: "100%",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Importer un modèle (.glb)
+                    <input
+                      type="file"
+                      accept=".glb"
+                      multiple
+                      style={{ display: "none" }}
+                      onChange={(event) => {
+                        const files = Array.from(event.target.files || []);
+                        if (!files.length) return;
+                        const now = Date.now();
+                        const newEntries = files.map((file, index) => ({
+                          id: `${now}-${index}-${file.name}`,
+                          name: file.name.replace(/\.glb$/i, ""),
+                          url: URL.createObjectURL(file),
+                          previewUrl: null,
+                        }));
+                        setLocalModels((prev) => [...prev, ...newEntries]);
+                        const last = newEntries[newEntries.length - 1];
+                        setSelectedLocalModelId(last.id);
+                        // On utilise un type générique pour les modèles locaux
+                        setModelType("Custom");
+                        // reset input pour permettre de réimporter le même fichier
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
                 </div>
+
+                {/* Modèles intégrés */}
+                <div className="model-list" style={{ marginTop: 4 }}>
+                  {["LurePret5", "LureDouble", "Shad", "Shad2"].map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      className={`model-item${
+                        modelType === type && !selectedLocalModel
+                          ? " model-item--active"
+                          : ""
+                      }`}
+                      onClick={() => {
+                        setSelectedLocalModelId(null);
+                        setModelType(type);
+                      }}
+                    >
+                      <span className="model-name">{type}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Modèles importés en local */}
+                {localModels.length > 0 && (
+                  <>
+                    <span
+                      className="assets-section-title"
+                      style={{ display: "block", marginTop: 10 }}
+                    >
+                      Modèles importés (local)
+                    </span>
+                    <div className="model-list" style={{ marginTop: 4 }}>
+                      {localModels.map((m) => (
+                        <div
+                          key={m.id}
+                          className={`model-item${
+                            selectedLocalModelId === m.id
+                              ? " model-item--active"
+                              : ""
+                          }`}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 6,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                            <button
+                              type="button"
+                              style={{
+                                all: "unset",
+                                cursor: "pointer",
+                                flex: 1,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                              onClick={() => {
+                                setSelectedLocalModelId(m.id);
+                                setModelType("Custom");
+                              }}
+                            >
+                              {m.previewUrl ? (
+                                <img
+                                  src={m.previewUrl}
+                                  alt={m.name}
+                                  className="model-thumb"
+                                />
+                              ) : (
+                                <div className="model-thumb model-thumb--placeholder">
+                                  {m.name.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              <span className="model-name">{m.name}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              style={{ padding: "2px 6px", fontSize: 11 }}
+                              onClick={() => {
+                                setLocalModels((prev) =>
+                                  prev.filter((x) => x.id !== m.id),
+                                );
+                                if (selectedLocalModelId === m.id) {
+                                  setSelectedLocalModelId(null);
+                                }
+                              }}
+                            >
+                              Suppr
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            style={{ padding: "2px 6px", fontSize: 11 }}
+                            onClick={() => {
+                              if (!glRef.current || selectedLocalModelId !== m.id) {
+                                setSelectedLocalModelId(m.id);
+                                setModelType("Custom");
+                              }
+                              if (!glRef.current) return;
+                              const dataUrl =
+                                glRef.current.domElement.toDataURL("image/png");
+                              setLocalModels((prev) =>
+                                prev.map((x) =>
+                                  x.id === m.id ? { ...x, previewUrl: dataUrl } : x,
+                                ),
+                              );
+                            }}
+                          >
+                            Vignette
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1670,10 +1911,13 @@ function CreateLurePage() {
             <Environment preset="sunset" />
             <LureModel
               modelType={modelType}
+              modelUrl={selectedLocalModel?.url || null}
               color={color}
-              // Le dégradé 3 couleurs est activé pour LurePret5 et les anciens modèles compatibles.
+              // Le dégradé 3 couleurs est activé pour LurePret5, Shad / Shad2 et les anciens modèles compatibles.
               useGradient={
                 modelType === "LurePret5" ||
+                modelType === "Shad" ||
+                modelType === "Shad2" ||
                 modelType === "Lure11" ||
                 modelType === "Lure12" ||
                 modelType === "Lure13" ||
@@ -1691,12 +1935,12 @@ function CreateLurePage() {
               gradientTop={gradientTop}
               gradientMiddle={gradientMiddle}
               gradientBottom={gradientBottom}
-              gradientSmoothness={gradientStrength / 100}
+              gradientSmoothness={0.2 + (0.8 * gradientStrength) / 100}
               gradientCenter={gradientPosition / 100}
               gradientAngle={gradientAngle}
               // On garde toujours un minimum de douceur pour que le bas reste visible,
               // même quand le slider est à 0.
-              gradientSmoothness2={gradientStrength2 / 100}
+              gradientSmoothness2={0.2 + (0.8 * gradientStrength2) / 100}
               gradientCenter2={gradientPosition2 / 100}
               gradientTargetName={
                 modelType === "LurePret5" ||
@@ -1869,7 +2113,8 @@ function CreateLurePage() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      {/* On utilise désormais uniquement la page de création comme écran principal */}
+      <Route path="/" element={<CreateLurePage />} />
       <Route path="/new" element={<CreateLurePage />} />
       <Route path="/auth" element={<AuthPage />} />
     </Routes>

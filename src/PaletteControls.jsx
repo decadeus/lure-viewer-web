@@ -1,5 +1,28 @@
 import React from "react";
 
+const frontTripleOptions = [
+  { key: null, label: "Aucun" },
+  { key: "Triple_#1", label: "#1" },
+  { key: "Triple_#2", label: "#2" },
+  { key: "Triple_#4", label: "#4" },
+  { key: "Triple_#6", label: "#6" },
+];
+
+const backTripleOptions = [
+  { key: null, label: "Aucun" },
+  { key: "Triple_#1", label: "#1" },
+  { key: "Triple_#2", label: "#2" },
+  { key: "Triple_#4", label: "#4" },
+  { key: "Triple_#6", label: "#6" },
+];
+
+const backPaletteOptions = [
+  { key: null, label: "Aucune" },
+  { key: "Palette_H", label: "H" },
+  { key: "Palette_M", label: "M" },
+  { key: "Palette_L", label: "L" },
+];
+
 export function LurePret5PaletteControls({
   frontTripleSize,
   setFrontTripleSize,
@@ -8,29 +31,6 @@ export function LurePret5PaletteControls({
   backTripleSize,
   setBackTripleSize,
 }) {
-  const frontTripleOptions = [
-    { key: null, label: "Aucun" },
-    { key: "Triple_#1", label: "#1" },
-    { key: "Triple_#2", label: "#2" },
-    { key: "Triple_#4", label: "#4" },
-    { key: "Triple_#6", label: "#6" },
-  ];
-
-  const backPaletteOptions = [
-    { key: null, label: "Aucune" },
-    { key: "Palette_H", label: "H" },
-    { key: "Palette_M", label: "M" },
-    { key: "Palette_L", label: "L" },
-  ];
-
-  const backTripleOptions = [
-    { key: null, label: "Aucun" },
-    { key: "Triple_#1", label: "#1" },
-    { key: "Triple_#2", label: "#2" },
-    { key: "Triple_#4", label: "#4" },
-    { key: "Triple_#6", label: "#6" },
-  ];
-
   return (
     <section className="panel">
       <h2 className="panel-title">Triple devant</h2>
@@ -108,6 +108,58 @@ export function LurePret5PaletteControls({
   );
 }
 
+// Contrôles simplifiés pour Shad / Shad2 : uniquement triples avant / arrière
+export function ShadTripleControls({
+  frontTripleSize,
+  setFrontTripleSize,
+  backTripleSize,
+  setBackTripleSize,
+}) {
+  return (
+    <section className="panel">
+      <h2 className="panel-title">Triple devant</h2>
+      <div className="home-type-filters" style={{ marginBottom: 8 }}>
+        {frontTripleOptions.map((opt) => (
+          <button
+            key={opt.key ?? "none"}
+            type="button"
+            className={`home-type-filter-btn${
+              frontTripleSize === opt.key ? " home-type-filter-btn--active" : ""
+            }`}
+            onClick={() =>
+              setFrontTripleSize((current) =>
+                current === opt.key ? null : opt.key,
+              )
+            }
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
 
+      <h2 className="panel-title" style={{ marginTop: 12 }}>
+        Triple arrière
+      </h2>
+      <div className="home-type-filters">
+        {backTripleOptions.map((opt) => (
+          <button
+            key={opt.key ?? "none"}
+            type="button"
+            className={`home-type-filter-btn${
+              backTripleSize === opt.key ? " home-type-filter-btn--active" : ""
+            }`}
+            onClick={() =>
+              setBackTripleSize((current) =>
+                current === opt.key ? null : opt.key,
+              )
+            }
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 

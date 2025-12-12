@@ -205,11 +205,19 @@ export function CreateLureSidebar({
                 <div className="color-picker-row">
                   <span>Taille</span>
                   <div className="home-type-filters" style={{ flex: 1 }}>
-                    {[
-                      { key: "M", label: "M" },
-                      { key: "L", label: "L" },
-                      { key: "XL", label: "XL" },
-                    ].map((opt) => (
+                    {(modelType === "LureDouble" ||
+                      modelType === "Shad" ||
+                      modelType === "Shad2"
+                      ? [
+                          { key: "M", label: "M" },
+                          { key: "L", label: "L" },
+                        ]
+                      : [
+                          { key: "M", label: "M" },
+                          { key: "L", label: "L" },
+                          { key: "XL", label: "XL" },
+                        ]
+                    ).map((opt) => (
                       <button
                         key={opt.key}
                         type="button"
@@ -284,7 +292,9 @@ export function CreateLureSidebar({
           {activeToolTab === "triple" && (
             <section className="panel">
               <h2 className="panel-title">Triple / Palette</h2>
-              {modelType === "LurePret5" && (
+              {(modelType === "LurePret5" ||
+                modelType === "Shad" ||
+                modelType === "Shad2") && (
                 <LurePret5PaletteControls
                   frontTripleSize={frontTripleSize}
                   setFrontTripleSize={setFrontTripleSize}
@@ -424,6 +434,8 @@ export function CreateLureSidebar({
             <section className="panel">
               <h2 className="panel-title">Couleurs</h2>
               {(modelType === "LurePret5" ||
+                modelType === "Shad" ||
+                modelType === "Shad2" ||
                 modelType === "Lure11" ||
                 modelType === "Lure12" ||
                 modelType === "Lure13" ||

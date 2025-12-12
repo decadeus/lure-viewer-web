@@ -183,3 +183,4 @@ export function AxesWithTicks({ worldPerCm, lengthCm, paddingCm = 2, defaultMaxC
     </group>
   );
 }
+
