@@ -1406,6 +1406,8 @@ function CreateLurePage() {
   // Modèles GLB importés localement (non sauvegardés sur le serveur)
   const [localModels, setLocalModels] = useState([]);
   const [selectedLocalModelId, setSelectedLocalModelId] = useState(null);
+  // Textures importées localement
+  const [localTextures, setLocalTextures] = useState([]);
   const glRef = useRef(null);
   const [currentDimensionsCm, setCurrentDimensionsCm] = useState(null);
   const [showAxes, setShowAxes] = useState(false);
@@ -1780,6 +1782,40 @@ function CreateLurePage() {
                   </button>
                   <span className="assets-section-title">Textures</span>
                 </div>
+                {/* Bouton pour ajouter des textures locales */}
+                <div style={{ marginBottom: 10 }}>
+                  <label
+                    className="secondary-btn"
+                    style={{
+                      width: "100%",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Ajouter des textures (.png)
+                    <input
+                      type="file"
+                      accept=".png"
+                      multiple
+                      style={{ display: "none" }}
+                      onChange={(event) => {
+                        const files = Array.from(event.target.files || []);
+                        if (!files.length) return;
+                        const now = Date.now();
+                        const entries = files.map((file, index) => ({
+                          id: `${now}-${index}-${file.name}`,
+                          name: file.name.replace(/\.[^.]+$/i, ""),
+                          url: URL.createObjectURL(file),
+                        }));
+                        setLocalTextures((prev) => [...prev, ...entries]);
+                        // reset input pour pouvoir réimporter le même fichier si besoin
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {/* Textures intégrées */}
                 <div className="texture-list">
                   {[
                     {
@@ -1815,6 +1851,51 @@ function CreateLurePage() {
                     </button>
                   ))}
                 </div>
+
+                {/* Textures importées localement */}
+                {localTextures.length > 0 && (
+                  <>
+                    <span
+                      className="assets-section-title"
+                      style={{ display: "block", marginTop: 12, marginBottom: 4 }}
+                    >
+                      Textures importées (local)
+                    </span>
+                    <div className="texture-list">
+                      {localTextures.map((tex) => (
+                        <button
+                          key={tex.id}
+                          type="button"
+                          className={`texture-item${
+                            selectedTexture === tex.url
+                              ? " texture-item--active"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            setSelectedTexture((current) =>
+                              current === tex.url ? null : tex.url,
+                            )
+                          }
+                        >
+                          <div
+                            className="texture-thumb"
+                            style={{
+                              backgroundImage: `url(${tex.url})`,
+                            }}
+                          />
+                          <div className="texture-meta">
+                            <span className="texture-name">{tex.name}</span>
+                            <span className="texture-tag">
+                              {selectedTexture === tex.url
+                                ? "Utilisée sur le leurre"
+                                : "Cliquer pour appliquer"}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
                 <div className="color-picker-row" style={{ marginTop: 12 }}>
                   <span>Angle texture</span>
                   <input
