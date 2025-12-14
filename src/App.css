@@ -55,6 +55,165 @@
   gap: 2px;
 }
 
+/* Barre d'assets horizontale façon Blender (en bas de la vue 3D) */
+.asset-dock {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 12px;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid #111827;
+  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.9);
+}
+
+.asset-dock-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  background: #020617;
+  border: 1px solid #111827;
+}
+
+.asset-dock-tab-btn {
+  width: 72px;
+  border-radius: 999px;
+  border: 1px solid #1f2937;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  background: #030712;
+  color: #9ca3af;
+  cursor: pointer;
+  text-align: center;
+}
+
+.asset-dock-tab-btn--active {
+  background: #22c55e;
+  color: #022c22;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.6);
+}
+
+.asset-dock-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.asset-dock-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.asset-dock-packs {
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 8px;
+  border-right: 1px solid #1f2937;
+}
+
+.asset-dock-section-title {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.asset-dock-pack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.asset-dock-pack-btn {
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid #1f2937;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  background: #020617;
+  color: #9ca3af;
+  text-align: left;
+  cursor: pointer;
+}
+
+.asset-dock-pack-btn--active {
+  background: #22c55e;
+  color: #022c22;
+  border-color: #22c55e;
+  box-shadow: 0 8px 18px rgba(34, 197, 94, 0.5);
+}
+
+.asset-dock-pack-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.asset-dock-import-btn {
+  width: 100%;
+  justify-content: center;
+  font-size: 0.78rem;
+  padding: 6px 10px;
+}
+
+.asset-dock-items {
+  flex: 1;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.asset-dock-empty-text {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #9ca3af;
+}
+
+.bavette-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bavette-card {
+  width: 120px;
+  padding: 6px 6px 4px;
+  border-radius: 10px;
+  border: 1px solid #111827;
+  background: #020617;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.bavette-card--active {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: #22c55e;
+  box-shadow: 0 8px 18px rgba(34, 197, 94, 0.45);
+}
+
+.bavette-card-thumb {
+  height: 52px;
+  border-radius: 7px;
+  background-image: radial-gradient(circle at 30% 0, #4ade80 0, #020617 60%);
+  box-shadow: 0 0 0 1px #020617, 0 0 0 2px #111827;
+}
+
+.bavette-card-label {
+  font-size: 0.78rem;
+  color: #e5e7eb;
+}
+
 .sidebar {
   width: 320px;
   background: rgba(15, 23, 42, 0.96);
@@ -356,6 +515,12 @@
   color: #9ca3af;
 }
 
+.assets-sidebar-hint {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
 .assets-back-row {
   display: flex;
   align-items: center;
@@ -421,6 +586,10 @@
   box-shadow: 0 0 0 1px #020617, 0 0 0 2px #111827;
 }
 
+.texture-thumb-wrapper {
+  position: relative;
+}
+
 .texture-thumb--pike {
   background-image: url("/textures/piketexture2.png");
 }
@@ -439,6 +608,30 @@
 .texture-tag {
   font-size: 0.72rem;
   color: #9ca3af;
+}
+
+.texture-delete-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border-radius: 999px;
+  border: none;
+  width: 18px;
+  height: 18px;
+  font-size: 0.7rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.9);
+  color: #f9fafb;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.texture-thumb-wrapper:hover .texture-delete-btn {
+  opacity: 1;
 }
 
 /* Liste des modèles dans Assets > Modèles */

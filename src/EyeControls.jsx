@@ -5,6 +5,10 @@ export function EyeControls({
   setEyeWhiteColor,
   eyeIrisColor,
   setEyeIrisColor,
+  eyeGlowColor,
+  setEyeGlowColor,
+  eyeGlowStrength,
+  setEyeGlowStrength,
 }) {
   return (
     <section className="panel">
@@ -24,6 +28,30 @@ export function EyeControls({
           value={eyeIrisColor}
           onChange={(e) => setEyeIrisColor(e.target.value)}
         />
+      </div>
+      <div className="color-picker-row" style={{ marginTop: 8 }}>
+        <span>Couleur halo</span>
+        <input
+          type="color"
+          value={eyeGlowColor}
+          onChange={(e) => setEyeGlowColor(e.target.value)}
+        />
+      </div>
+      <div className="color-picker-row" style={{ marginTop: 8 }}>
+        <span>Taille / intensité halo</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={eyeGlowStrength}
+          onChange={(e) => setEyeGlowStrength(Number(e.target.value))}
+          style={{ flex: 1 }}
+        />
+        <span style={{ width: 48, textAlign: "right" }}>
+          {Math.round(eyeGlowStrength * 100)}
+          %
+        </span>
       </div>
     </section>
   );

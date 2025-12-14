@@ -97,6 +97,8 @@ export function CreateLureSidebar({
   setBackTripleSize,
   backPaletteType,
   setBackPaletteType,
+  bavetteType,
+  setBavetteType,
   gradientTop,
   setGradientTop,
   gradientMiddle,
@@ -121,6 +123,10 @@ export function CreateLureSidebar({
   setEyeWhiteColor,
   eyeIrisColor,
   setEyeIrisColor,
+  eyeGlowColor,
+  setEyeGlowColor,
+  eyeGlowStrength,
+  setEyeGlowStrength,
   lureSize,
   setLureSize,
   paletteType,
@@ -137,6 +143,20 @@ export function CreateLureSidebar({
   setTextureStrength,
   scalesStrength,
   setScalesStrength,
+  textureRepeat,
+  setTextureRepeat,
+  textureOffsetU,
+  setTextureOffsetU,
+  textureOffsetV,
+  setTextureOffsetV,
+  textureMarkColor,
+  setTextureMarkColor,
+  textureMarkStrength,
+  setTextureMarkStrength,
+  hasBavetteSocket,
+  activeToolTab,
+  setActiveToolTab,
+  bavetteOptions,
   showAxes,
   setShowAxes,
   error,
@@ -144,11 +164,6 @@ export function CreateLureSidebar({
   onSubmit,
   onLogout,
 }) {
-  // Sous-accordéons internes pour certains onglets
-  const [activeSection, setActiveSection] = useState("triple");
-  // Onglet de la colonne d'icônes (Taille / Triple / Textures / Couleurs / Yeux / Affichage)
-  const [activeToolTab, setActiveToolTab] = useState("size");
-
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -172,6 +187,10 @@ export function CreateLureSidebar({
           {[
             { key: "size", label: "Taille du leurre", icon: "Ta" },
             { key: "triple", label: "Triple / Palette", icon: "T" },
+            // Onglet bavette seulement si le modèle courant expose un socket de bavette
+            ...(hasBavetteSocket
+              ? [{ key: "bavette", label: "Bavette", icon: "Bv" }]
+              : []),
             { key: "textures", label: "Textures", icon: "Tx" },
             { key: "colors", label: "Couleurs", icon: "C" },
             { key: "eyes", label: "Yeux", icon: "👁" },
@@ -307,42 +326,46 @@ export function CreateLureSidebar({
             </section>
           )}
 
-          {/* Onglet Textures */}
+          {/* Onglet Bavette */}
+          {activeToolTab === "bavette" && hasBavetteSocket && (
+            <section className="panel">
+              <h2 className="panel-title">Bavette</h2>
+              <div className="home-type-filters">
+                {(bavetteOptions || [{ key: null, label: "Aucune" }]).map(
+                  (opt) => (
+                  <button
+                    key={opt.key ?? "none"}
+                    type="button"
+                    className={`home-type-filter-btn${
+                      bavetteType === opt.key
+                        ? " home-type-filter-btn--active"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      setBavetteType((current) =>
+                        current === opt.key ? null : opt.key,
+                      )
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                  ),
+                )}
+              </div>
+              <p className="panel-helper">
+                Les bavettes proviennent du pack <code>Pack_Bavette</code> et
+                sont alignées automatiquement sur le point d&apos;attache{" "}
+                <code>A-Bav</code> présent dans le modèle Blender.
+              </p>
+            </section>
+          )}
+
+          {/* Onglet Textures (uniquement les réglages : la sélection se fait
+              désormais dans la colonne de gauche, onglet Assets → Textures) */}
           {activeToolTab === "textures" && (
             <section className="panel">
               <h2 className="panel-title">Textures</h2>
                 <>
-                  <div className="texture-list">
-                    {[
-                      { key: "textures/Pike-002.png", name: "Pike 1" },
-                      { key: "textures/Pike_003.png", name: "Pike 2" },
-                    ].map((tex) => (
-                      <button
-                        key={tex.key}
-                        type="button"
-                        className={`texture-item${
-                          selectedTexture === tex.key
-                            ? " texture-item--active"
-                            : ""
-                        }`}
-                        onClick={() =>
-                          setSelectedTexture((current) =>
-                            current === tex.key ? null : tex.key,
-                          )
-                        }
-                      >
-                        <div className="texture-thumb texture-thumb--pike" />
-                        <div className="texture-meta">
-                          <span className="texture-name">{tex.name}</span>
-                          <span className="texture-tag">
-                            {selectedTexture === tex.key
-                              ? "Utilisée sur le leurre"
-                              : "Cliquer pour appliquer"}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
                   <div className="color-picker-row" style={{ marginTop: 12 }}>
                     <span>Angle texture</span>
                     <input
@@ -374,6 +397,84 @@ export function CreateLureSidebar({
                     <span style={{ width: 48, textAlign: "right" }}>
                       x
                       {textureScale.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Répétition de la texture</span>
+                    <div className="home-type-filters" style={{ flex: 1 }}>
+                      {[
+                        { key: true, label: "Oui (motif répété)" },
+                        { key: false, label: "Non (une seule fois)" },
+                      ].map((opt) => (
+                        <button
+                          key={String(opt.key)}
+                          type="button"
+                          className={`home-type-filter-btn${
+                            textureRepeat === opt.key
+                              ? " home-type-filter-btn--active"
+                              : ""
+                          }`}
+                          onClick={() => setTextureRepeat(opt.key)}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Position horizontale</span>
+                    <input
+                      type="range"
+                      min={-2}
+                      max={2}
+                      step={0.01}
+                      value={textureOffsetU}
+                      onChange={(e) => setTextureOffsetU(Number(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ width: 48, textAlign: "right" }}>
+                      {textureOffsetU.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Position verticale</span>
+                    <input
+                      type="range"
+                      min={-1}
+                      max={1}
+                      step={0.01}
+                      value={textureOffsetV}
+                      onChange={(e) => setTextureOffsetV(Number(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ width: 48, textAlign: "right" }}>
+                      {textureOffsetV.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Couleur des marques</span>
+                    <input
+                      type="color"
+                      value={textureMarkColor}
+                      onChange={(e) => setTextureMarkColor(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Intensité des marques</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={textureMarkStrength}
+                      onChange={(e) =>
+                        setTextureMarkStrength(Number(e.target.value))
+                      }
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ width: 48, textAlign: "right" }}>
+                      {Math.round(textureMarkStrength * 100)}
+                      %
                     </span>
                   </div>
                   <div className="color-picker-row" style={{ marginTop: 8 }}>
@@ -613,6 +714,10 @@ export function CreateLureSidebar({
               setEyeWhiteColor={setEyeWhiteColor}
               eyeIrisColor={eyeIrisColor}
               setEyeIrisColor={setEyeIrisColor}
+              eyeGlowColor={eyeGlowColor}
+              setEyeGlowColor={setEyeGlowColor}
+              eyeGlowStrength={eyeGlowStrength}
+              setEyeGlowStrength={setEyeGlowStrength}
             />
           )}
 

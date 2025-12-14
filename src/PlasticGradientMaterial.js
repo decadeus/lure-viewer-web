@@ -22,8 +22,12 @@ const PlasticGradientMaterial = shaderMaterial(
     mapRotation: 0.0, // rotation de la texture (radians)
     mapCenter: new THREE.Vector2(0.5, 0.5), // centre de rotation en UV
     mapScale: new THREE.Vector2(1.0, 1.0), // échelle U/V de la texture
+    mapOffset: new THREE.Vector2(0.0, 0.0), // décalage U/V de la texture
     blurRadius: 0.0, // 0 = net, 1 = flou maximum
-    textureStrength: 1.0, // 0 = texture invisible, 1 = texture pleine
+    textureStrength: 1.0, // 0 = texture invisible, 1 = pleine
+    // Couleur / intensité des marques (zones sombres de la texture Pike)
+    markColor: new THREE.Color("#000000"),
+    markStrength: 1.0,
     scalesMap: null, // texture d'écailles optionnelle
     scalesStrength: 0.0, // 0 = pas d'écailles, 1 = écailles max
     lightDir: new THREE.Vector3(0.4, 0.8, 0.3).normalize(), // direction lumière
@@ -78,8 +82,11 @@ const PlasticGradientMaterial = shaderMaterial(
     uniform float mapRotation;
     uniform vec2 mapCenter;
     uniform vec2 mapScale;
+    uniform vec2 mapOffset;
     uniform float blurRadius;
     uniform float textureStrength;
+    uniform vec3 markColor;
+    uniform float markStrength;
     uniform sampler2D scalesMap;
     uniform float scalesStrength;
     uniform vec3 lightDir;
@@ -149,6 +156,9 @@ const PlasticGradientMaterial = shaderMaterial(
       vec2 centeredForScale = uvLocal - mapCenter;
       uvLocal = centeredForScale * mapScale + mapCenter;
 
+      // Appliquer un éventuel décalage (mapOffset) pour "glisser" le motif
+      uvLocal += mapOffset;
+
       // Échantillonnage de la texture, avec éventuel flou simple
       vec4 texCenter = texture2D(map, uvLocal);
       vec4 texColor = texCenter;
@@ -175,13 +185,21 @@ const PlasticGradientMaterial = shaderMaterial(
         float k = clamp(blurRadius, 0.0, 1.0);
         texColor = mix(texCenter, blurred, k);
       }
-      // Si la texture a un alpha ou une luminosité, l'utiliser comme masque,
-      // modulé par textureStrength (0-1) pour la "visibilité" de la texture Pike.
-      float maskFactor = max(texColor.a, max(texColor.r, max(texColor.g, texColor.b)));
+      // Utiliser la luminosité de la texture comme masque de "marques" sombres :
+      // - fond blanc (#ffffff)  -> lum ~ 1.0  -> mask ~ 0 (aucun effet)
+      // - marques noires (#000) -> lum ~ 0.0  -> mask ~ 1 (effet maximum)
+      float lumTex = (texColor.r + texColor.g + texColor.b) / 3.0;
       float kTex = clamp(textureStrength, 0.0, 1.0);
-      float blendFactor = maskFactor * kTex;
-      if (blendFactor > 0.001) {
-        color *= mix(vec3(1.0), texColor.rgb, blendFactor);
+      float darkness = 1.0 - lumTex;
+      // Seuil ~0.6 : en dessous, on considère que c'est encore du fond.
+      float maskMarks = smoothstep(0.6, 1.0, darkness) * kTex;
+      float kMark = clamp(markStrength, 0.0, 1.0);
+      float markMix = maskMarks * kMark;
+      if (markMix > 0.001) {
+        // On garde les reflets et le volume du leurre, mais on teinte la zone
+        // sombre vers la couleur des marques choisie par l'utilisateur.
+        vec3 markTarget = mix(color, markColor, 0.7);
+        color = mix(color, markTarget, markMix);
       }
 
       // Écailles : on applique une deuxième texture en niveaux de gris qui assombrit la couleur

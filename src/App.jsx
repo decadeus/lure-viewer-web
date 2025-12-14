@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Routes, Route, useNavigate, useParams } from "react-router-dom";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
@@ -35,6 +35,10 @@ function getModelPath(modelType) {
     case "Shad2":
       // Shad2 utilise désormais le fichier Shad5.glb (modèle final avec shade smooth + attaches RM*/RL*)
       return `${import.meta.env.BASE_URL}models/Shad5.glb`;
+    case "LureTop":
+      return `${import.meta.env.BASE_URL}models/LureTop.glb`;
+    case "LureTop3":
+      return `${import.meta.env.BASE_URL}models/LureTop3.glb`;
     default:
       // Fallback : tous les anciens modèles pointent maintenant sur LurePret7
       return `${import.meta.env.BASE_URL}models/LurePret7.glb`;
@@ -129,6 +133,11 @@ function LureModel({
   textureScale = 1, // échelle U (densité) de la texture
   textureBlur = 0, // 0 = net, 1 = flou
   textureStrength = 1, // 0 = texture invisible, 1 = pleine
+  textureRepeat = true, // true = RepeatWrapping, false = ClampToEdge (pas de recopie)
+  textureOffsetU = 0, // décalage horizontal de la texture (UV.x)
+  textureOffsetV = 0, // décalage vertical de la texture (UV.y)
+  textureMarkColor = "#000000", // couleur des marques (zones sombres de la texture)
+  textureMarkStrength = 1, // 0-1 intensité de la couleur des marques
   scalesStrength = 0, // 0 = pas d'écailles, 1 = écailles fortes
   paletteType = null, // ex: "Palette_H", "Palette_M" (depuis Palettes.glb)
   tripleSize = null, // ex: "Triple_#1", "Triple_#2", "Triple_#4", "Triple_#6" (depuis N_Triple_Asset.glb)
@@ -137,8 +146,13 @@ function LureModel({
   backPaletteType = null, // pour LurePret5 : Palette_H / M / L à l'arrière
   eyeWhiteColor = "#ffffff", // couleur de la partie "Blanc" de l'œil (sclère)
   eyeIrisColor = "#000000", // couleur de la partie "Iris" autour de l'œil
+  eyeGlowColor = "#ff0000", // couleur du halo autour de l'œil
+  eyeGlowStrength = 0, // 0 = pas de halo, 1 = halo fort
+  bavetteType = null, // ex: "BavetteM" / "BavetteL" pour LureTop
+  bavettePackUrl = null, // chemin/URL du pack de bavettes (null => pack intégré)
   lureSize = "M", // \"M\" (base), \"L\" (x1.25), \"XL\" (x1.5)
   onComputedDimensionsCm = null,
+  onHasBavetteSocketChange = null,
 }) {
   const modelPath = modelUrl || getModelPath(modelType);
   const gltf = useGLTF(modelPath);
@@ -168,6 +182,11 @@ function LureModel({
   const tripleGltf = useGLTF(
     resolveStaticPath("Triple/N_Triple_Asset.glb"),
   );
+  // Pack de bavettes (intégré ou importé) contenant BavetteM / BavetteL.
+  // Si bavettePackUrl est défini (blob:...), on l'utilise tel quel.
+  // Sinon, on utilise le pack intégré dans public/models/Pack_Bavette7.glb.
+  const bavettePackPath = bavettePackUrl || "models/Pack_Bavette7.glb";
+  const bavetteGltf = useGLTF(resolveStaticPath(bavettePackPath));
   // Modèles de référence pour la calibration des cm
   const referenceGltf = useGLTF(
     `${import.meta.env.BASE_URL}models/LurePret8.glb`,
@@ -192,8 +211,13 @@ function LureModel({
       const rotationRad = (textureRotation * Math.PI) / 180;
       colorTexture.center.set(0.5, 0.5);
       colorTexture.rotation = rotationRad;
-      colorTexture.wrapS = THREE.RepeatWrapping;
-      colorTexture.wrapT = THREE.RepeatWrapping;
+      const wrapMode = textureRepeat
+        ? THREE.RepeatWrapping
+        : THREE.ClampToEdgeWrapping;
+      colorTexture.wrapS = wrapMode;
+      colorTexture.wrapT = wrapMode;
+      // Déplacement du motif dans l'espace UV
+      colorTexture.offset.set(textureOffsetU, textureOffsetV);
       colorTexture.needsUpdate = true;
     }
 
@@ -287,7 +311,16 @@ function LureModel({
       }
     }
 
-    // 2) Normalisation du modèle (position/échelle) pour l'affichage
+    // 2) Détection facultative de sockets de bavette (par ex. "A-Bav")
+    const bavetteSocketNames = ["A-Bav"];
+    const hasBavetteSocket = bavetteSocketNames.some(
+      (name) => !!scene.getObjectByName(name),
+    );
+    if (typeof onHasBavetteSocketChange === "function") {
+      onHasBavetteSocketChange(hasBavetteSocket);
+    }
+
+    // 3) Normalisation du modèle (position/échelle) pour l'affichage
     if (!scene.userData.normalized) {
       const box = new THREE.Box3().setFromObject(scene);
       const center = box.getCenter(new THREE.Vector3());
@@ -328,7 +361,7 @@ function LureModel({
       scene.userData.currentSizeScale = sizeScale;
     }
 
-    // 3) Calcul des dimensions réelles approximatives du leurre en cm
+    // 4) Calcul des dimensions réelles approximatives du leurre en cm
     if (scene.userData.cmPerWorldUnit && scene.userData.baseSizeWorld) {
       const cmPerWorldUnit = scene.userData.cmPerWorldUnit;
       const baseSizeCm = scene.userData.baseSizeWorld
@@ -350,7 +383,7 @@ function LureModel({
       }
     }
 
-    // 4) Shad / Shad2 : n'afficher que les attaches correspondant à la taille du leurre
+    // 5) Shad / Shad2 : n'afficher que les attaches correspondant à la taille du leurre
     // - taille M  -> Attach_MF / Attach_MB visibles, Attach_LF / Attach_LB masqués
     // - taille L  -> Attach_LF / Attach_LB visibles, Attach_MF / Attach_MB masqués
     if (modelType === "Shad" || modelType === "Shad2") {
@@ -456,6 +489,7 @@ function LureModel({
           mat.clearcoatRoughness = 0.05;
         }
       }
+
     });
 
     // Gestion des différents "runners" (Slallow / Medium / Deep)
@@ -677,7 +711,7 @@ function LureModel({
             child.material = material;
           }
 
-          if (material.uniforms) {
+            if (material.uniforms) {
             if (material.uniforms.colorA) {
               material.uniforms.colorA.value.copy(topColor);
             }
@@ -739,11 +773,25 @@ function LureModel({
               const scaleU = Math.max(0.1, textureScale || 1);
               material.uniforms.mapScale.value.set(scaleU, 1.0);
             }
+            if (material.uniforms.mapOffset) {
+              material.uniforms.mapOffset.value.set(
+                textureOffsetU,
+                textureOffsetV,
+              );
+            }
             if (material.uniforms.blurRadius) {
               material.uniforms.blurRadius.value = textureBlur;
             }
             if (material.uniforms.textureStrength) {
               material.uniforms.textureStrength.value = textureStrength;
+            }
+            if (material.uniforms.markColor) {
+              const mc = new THREE.Color(textureMarkColor || "#000000");
+              material.uniforms.markColor.value.copy(mc);
+            }
+            if (material.uniforms.markStrength) {
+              material.uniforms.markStrength.value =
+                textureMarkStrength != null ? textureMarkStrength : 1.0;
             }
             if (material.uniforms.scalesMap) {
               material.uniforms.scalesMap.value =
@@ -1040,6 +1088,60 @@ function LureModel({
         }
       }
     }
+
+    // Attache dynamique des bavettes (Pack_Bavette.glb) sur tout modèle
+    // qui expose un socket nommé "A-Bav" (convention Blender).
+    const socketName = "A-Bav";
+    const socket = scene.getObjectByName(socketName);
+
+    if (socket) {
+      // Nettoyer les éventuelles bavettes existantes sur ce point d'attache
+      socket.children
+        .slice()
+        .forEach((child) => {
+          if (child.userData?.isAttachedBavette) {
+            socket.remove(child);
+          }
+        });
+
+      // Si une bavette est sélectionnée et que le pack est chargé, l'attacher
+      if (bavetteType && bavetteGltf?.scene) {
+        const source = bavetteGltf.scene.getObjectByName(bavetteType);
+        if (source) {
+          const clone = source.clone(true);
+          clone.userData.isAttachedBavette = true;
+
+          // Compense la mise à l'échelle globale du leurre pour garder
+          // une taille physique cohérente de la bavette.
+          const invScale = 1 / (scene.userData.currentSizeScale || 1);
+          clone.scale.multiplyScalar(invScale);
+
+          // Donner à la bavette un matériau plastique semi‑transparent
+          clone.traverse((child) => {
+            if (!child.isMesh) return;
+            const mat = new THREE.MeshPhysicalMaterial({
+              color: "#f3f4f6", // quasi blanc
+              transparent: true,
+              opacity: 0.6,
+              roughness: 0.15,
+              metalness: 0.0,
+              clearcoat: 1.0,
+              clearcoatRoughness: 0.05,
+              transmission: 0.6, // effet "verre/plastique"
+              thickness: 0.2,
+            });
+            child.material = mat;
+          });
+
+          // Positionner la bavette à l'origine du socket, mais conserver
+          // son orientation locale telle que définie dans Blender.
+          // C'est donc dans Blender que tu règles vraiment l'angle.
+          clone.position.set(0, 0, 0);
+
+          socket.add(clone);
+        }
+      }
+    }
   }, [
     scene,
     color,
@@ -1062,6 +1164,11 @@ function LureModel({
     textureRotation,
     textureScale,
     textureBlur,
+    textureRepeat,
+    textureOffsetU,
+    textureOffsetV,
+    textureMarkColor,
+    textureMarkStrength,
     scalesStrength,
     scalesTexture,
     textureStrength,
@@ -1074,6 +1181,10 @@ function LureModel({
     backTripleSize,
     eyeWhiteColor,
     eyeIrisColor,
+    bavetteType,
+    bavetteGltf,
+    eyeGlowColor,
+    eyeGlowStrength,
     lureSize,
   ]);
 
@@ -1386,6 +1497,11 @@ function CreateLurePage() {
   const [textureBlur, setTextureBlur] = useState(0); // 0-1 (force du flou)
   const [textureStrength, setTextureStrength] = useState(1); // 0-1 (visibilité de la texture)
   const [scalesStrength, setScalesStrength] = useState(0); // 0-1 (intensité des écailles)
+  const [textureRepeat, setTextureRepeat] = useState(true); // true = répéter la texture
+  const [textureOffsetU, setTextureOffsetU] = useState(0); // décalage horizontal
+  const [textureOffsetV, setTextureOffsetV] = useState(0); // décalage vertical
+  const [textureMarkColor, setTextureMarkColor] = useState("#000000");
+  const [textureMarkStrength, setTextureMarkStrength] = useState(1); // 0-1
   const [paletteType, setPaletteType] = useState("Palette_H"); // palettes générales (avant)
   const [tripleSize, setTripleSize] = useState("Triple_#4"); // taille du triple à attacher (LurePret5 front/back)
   // Pour LurePret2 : tailles indépendantes pour l'attache avant / arrière.
@@ -1393,16 +1509,20 @@ function CreateLurePage() {
   const [frontTripleSize, setFrontTripleSize] = useState(null);
   const [backTripleSize, setBackTripleSize] = useState(null);
   const [backPaletteType, setBackPaletteType] = useState(null); // "Palette_H" | "Palette_M" | "Palette_L" | null
+  // Sélection de bavette (pour les leurres compatibles, ex: LureTop)
+  const [bavetteType, setBavetteType] = useState(null); // ex: "BavetteM", null = aucune
   const [eyeWhiteColor, setEyeWhiteColor] = useState("#ffffff");
   const [eyeIrisColor, setEyeIrisColor] = useState("#000000");
+  const [eyeGlowColor, setEyeGlowColor] = useState("#ff0000");
+  const [eyeGlowStrength, setEyeGlowStrength] = useState(0); // 0-1
   const [lureSize, setLureSize] = useState("M"); // M (base), L, XL
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   // Colonne gauche "à la Figma"
-  // - leftMainTab: "file" => leurs enregistrés, "assets" => bibliothèques (textures / modèles)
-  // - assetsView: "root" => liste des bibliothèques, ou "textures" / "models" pour le détail
+  // - leftMainTab: "file" => leurs enregistrés, "assets" => bibliothèques (modèles uniquement)
+  // - assetsView: "root" => liste des bibliothèques, ou "models" pour le détail
   const [leftMainTab, setLeftMainTab] = useState("file"); // "file" | "assets"
-  const [assetsView, setAssetsView] = useState("root"); // "root" | "textures" | "models"
+  const [assetsView, setAssetsView] = useState("root"); // "root" | "models"
   // Modèles GLB importés localement (non sauvegardés sur le serveur)
   const [localModels, setLocalModels] = useState([]);
   const [selectedLocalModelId, setSelectedLocalModelId] = useState(null);
@@ -1411,6 +1531,128 @@ function CreateLurePage() {
   const glRef = useRef(null);
   const [currentDimensionsCm, setCurrentDimensionsCm] = useState(null);
   const [showAxes, setShowAxes] = useState(false);
+  // Pack de bavettes sélectionné
+  // - null => pack intégré (models/Pack_Bavette7.glb)
+  // - url blob:... => pack importé localement
+  const [selectedBavettePackUrl, setSelectedBavettePackUrl] = useState(null);
+  const [localBavettePacks, setLocalBavettePacks] = useState([]);
+  // Indique si le modèle courant possède un socket de bavette (ex: A-Bav)
+  const [hasBavetteSocket, setHasBavetteSocket] = useState(false);
+  // Onglet actif dans la colonne de droite (Ta / T / Bv / Tx / C / Yeux / Ax)
+  const [activeToolTab, setActiveToolTab] = useState("size");
+  // Barre d'assets en bas (façon Blender) : Modèles / Textures / Bavettes
+  const [assetDockTab, setAssetDockTab] = useState("models"); // "models" | "textures" | "bavettes"
+  const [textureLibrary, setTextureLibrary] = useState("builtin"); // "builtin" | "local"
+  const [bavetteThumbnails, setBavetteThumbnails] = useState({});
+
+  // Charger le pack de bavettes correspondant (intégré ou importé) pour
+  // pouvoir en extraire dynamiquement la liste des bavettes disponibles.
+  const bavettePackPathForList =
+    selectedBavettePackUrl || `${import.meta.env.BASE_URL}models/Pack_Bavette7.glb`;
+  const bavettePackGltfForList = useGLTF(bavettePackPathForList);
+
+  const bavetteOptions = useMemo(() => {
+    const sceneBav = bavettePackGltfForList?.scene;
+    if (!sceneBav) {
+      return [{ key: null, label: "Aucune" }];
+    }
+    const names = new Set();
+    sceneBav.traverse((child) => {
+      if (child.isMesh && child.name) {
+        if (child.name.toLowerCase().startsWith("bavette")) {
+          names.add(child.name);
+        }
+      }
+    });
+    const sorted = Array.from(names).sort();
+    return [
+      { key: null, label: "Aucune" },
+      ...sorted.map((name) => ({ key: name, label: name })),
+    ];
+  }, [bavettePackGltfForList]);
+
+  // Générer des vignettes 2D pour chaque bavette du pack courant,
+  // en rendant rapidement le mesh dans un mini renderer Three.js hors écran.
+  useEffect(() => {
+    if (!bavettePackGltfForList?.scene) return;
+    if (typeof document === "undefined") return;
+
+    let cancelled = false;
+
+    const generateThumbnails = async () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const width = 200;
+        const height = 110;
+        canvas.width = width;
+        canvas.height = height;
+
+        const renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: true,
+          canvas,
+        });
+        renderer.setSize(width, height, false);
+
+        const camera = new THREE.PerspectiveCamera(30, width / height, 0.01, 10);
+        const scene = new THREE.Scene();
+        scene.background = null;
+
+        const light = new THREE.DirectionalLight(0xffffff, 1.2);
+        light.position.set(2, 3, 2);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+        const result = {};
+
+        // On saute l'entrée "Aucune" (key === null)
+        const targets = bavetteOptions.filter((opt) => opt.key);
+
+        for (const opt of targets) {
+          const source = bavettePackGltfForList.scene.getObjectByName(opt.key);
+          if (!source) continue;
+
+          const clone = source.clone(true);
+          scene.add(clone);
+
+          // Calculer un cadrage propre autour de la bavette
+          const box = new THREE.Box3().setFromObject(clone);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+
+          const maxSize = Math.max(size.x, size.y, size.z) || 1;
+          const distance = maxSize * 2.2;
+
+          camera.position.set(center.x + distance, center.y + distance * 0.4, center.z + distance);
+          camera.lookAt(center);
+          camera.updateProjectionMatrix();
+
+          renderer.render(scene, camera);
+          result[opt.key] = renderer.domElement.toDataURL("image/png");
+
+          scene.remove(clone);
+        }
+
+        renderer.dispose();
+
+        if (!cancelled) {
+          setBavetteThumbnails(result);
+        }
+      } catch (err) {
+        // En cas de problème, on garde simplement les vignettes "placeholder"
+        // eslint-disable-next-line no-console
+        console.error("Erreur génération vignettes bavettes", err);
+      }
+    };
+
+    generateThumbnails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bavettePackGltfForList, bavetteOptions]);
 
   const selectedLocalModel =
     localModels.find((m) => m.id === selectedLocalModelId) || null;
@@ -1478,6 +1720,8 @@ function CreateLurePage() {
       textureBlur,
       textureStrength,
       scalesStrength,
+      textureMarkColor,
+      textureMarkStrength,
       paletteType,
       frontTripleSize,
       backTripleSize,
@@ -1588,605 +1832,6 @@ function CreateLurePage() {
   return (
     <div className="app-root app-root--dark">
       <div className="editor-layout">
-        {/* Colonne gauche "à la Figma" */}
-        <aside className="editor-sidebar">
-          <div className="editor-sidebar-header">
-            <div className="editor-tabs">
-              <button
-                type="button"
-                className={`editor-tab${
-                  leftMainTab === "file" ? " editor-tab--active" : ""
-                }`}
-                onClick={() => {
-                  setLeftMainTab("file");
-                  setAssetsView("root");
-                }}
-              >
-                File
-              </button>
-              <button
-                type="button"
-                className={`editor-tab${
-                  leftMainTab === "assets" ? " editor-tab--active" : ""
-                }`}
-                onClick={() => {
-                  setLeftMainTab("assets");
-                  setAssetsView("root");
-                }}
-              >
-                Assets
-              </button>
-            </div>
-          </div>
-          <div className="editor-sidebar-content">
-            {leftMainTab === "file" && (
-              <div>
-                <h2 className="editor-sidebar-title">Mes leurres (local)</h2>
-                {localLures.length === 0 ? (
-                  <p className="editor-sidebar-placeholder">
-                    Aucun leurre enregistré pour l&apos;instant. Utilise le
-                    bouton &quot;Sauvegarder&quot; pour garder une
-                    configuration en local.
-                  </p>
-                ) : (
-                  <div className="model-list model-list--grid">
-                    {localLures.map((lure) => (
-                      <div
-                        key={lure.id}
-                        className={`model-item${
-                          activeLocalLureId === lure.id
-                            ? " model-item--active"
-                            : ""
-                        } model-item--thumb-only`}
-                      >
-                        <button
-                          type="button"
-                          className="model-thumb-button"
-                          onClick={() => {
-                            setActiveLocalLureId(lure.id);
-                            setModelType(lure.modelType || "LurePret5");
-                            setColor(lure.color || "#ff0000");
-                            setGradientTop(lure.gradientTop || "#ff5500");
-                            setGradientMiddle(
-                              lure.gradientMiddle || "#ffffff",
-                            );
-                            setGradientBottom(
-                              lure.gradientBottom || "#00ffaa",
-                            );
-                            setGradientStrength(
-                              lure.gradientStrength ?? 100,
-                            );
-                            setGradientPosition(
-                              lure.gradientPosition ?? 33,
-                            );
-                            setGradientStrength2(
-                              lure.gradientStrength2 ?? 100,
-                            );
-                            setGradientPosition2(
-                              lure.gradientPosition2 ?? 66,
-                            );
-                            setGradientAngle(lure.gradientAngle ?? 0);
-                            setRunnerType(
-                              lure.runnerType || "SlallowRunner",
-                            );
-                            setMaskType(lure.maskType || "none");
-                            setCollectionType(
-                              lure.collectionType || "Palette",
-                            );
-                            setSelectedTexture(
-                              lure.selectedTexture || null,
-                            );
-                            setTextureRotation(lure.textureRotation ?? 0);
-                            setTextureScale(lure.textureScale ?? 1);
-                            setTextureBlur(lure.textureBlur ?? 0);
-                            setTextureStrength(
-                              lure.textureStrength ?? 1,
-                            );
-                            setScalesStrength(lure.scalesStrength ?? 0);
-                            setPaletteType(
-                              lure.paletteType || "Palette_H",
-                            );
-                            setFrontTripleSize(
-                              lure.frontTripleSize ?? null,
-                            );
-                            setBackTripleSize(
-                              lure.backTripleSize ?? null,
-                            );
-                            setBackPaletteType(
-                              lure.backPaletteType ?? null,
-                            );
-                            setEyeWhiteColor(
-                              lure.eyeWhiteColor || "#ffffff",
-                            );
-                            setEyeIrisColor(
-                              lure.eyeIrisColor || "#000000",
-                            );
-                            setLureSize(lure.lureSize || "M");
-                          }}
-                        >
-                          {lure.previewUrl && (
-                            <img
-                              src={lure.previewUrl}
-                              alt={lure.modelType || "Leurre"}
-                              className="model-thumb"
-                            />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          className="model-thumb-delete"
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            setLocalLures((prev) =>
-                              prev.filter((x) => x.id !== lure.id),
-                            );
-                            if (activeLocalLureId === lure.id) {
-                              setActiveLocalLureId(null);
-                            }
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {leftMainTab === "assets" && assetsView === "root" && (
-              <div>
-                <h2 className="editor-sidebar-title">Libraries</h2>
-                <div className="assets-library-list">
-                  <button
-                    type="button"
-                    className="assets-library-card"
-                    onClick={() => setAssetsView("textures")}
-                  >
-                    <div className="assets-library-thumb assets-library-thumb--textures" />
-                    <div className="assets-library-meta">
-                      <span className="assets-library-name">Textures</span>
-                      <span className="assets-library-count">
-                        1 texture (Pike) pour commencer
-                      </span>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className="assets-library-card"
-                    onClick={() => setAssetsView("models")}
-                  >
-                    <div className="assets-library-thumb assets-library-thumb--models" />
-                    <div className="assets-library-meta">
-                      <span className="assets-library-name">
-                        Modèles de leurres
-                      </span>
-                      <span className="assets-library-count">
-                        Choisis la forme de ton leurre
-                      </span>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {leftMainTab === "assets" && assetsView === "textures" && (
-              <div>
-                <div className="assets-back-row">
-                  <button
-                    type="button"
-                    className="assets-back-btn"
-                    onClick={() => setAssetsView("root")}
-                  >
-                    ← Assets
-                  </button>
-                  <span className="assets-section-title">Textures</span>
-                </div>
-                {/* Bouton pour ajouter des textures locales */}
-                <div style={{ marginBottom: 10 }}>
-                  <label
-                    className="secondary-btn"
-                    style={{
-                      width: "100%",
-                      justifyContent: "center",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Ajouter des textures (.png)
-                    <input
-                      type="file"
-                      accept=".png"
-                      multiple
-                      style={{ display: "none" }}
-                      onChange={(event) => {
-                        const files = Array.from(event.target.files || []);
-                        if (!files.length) return;
-                        const now = Date.now();
-                        const entries = files.map((file, index) => ({
-                          id: `${now}-${index}-${file.name}`,
-                          name: file.name.replace(/\.[^.]+$/i, ""),
-                          url: URL.createObjectURL(file),
-                        }));
-                        setLocalTextures((prev) => [...prev, ...entries]);
-                        // reset input pour pouvoir réimporter le même fichier si besoin
-                        event.target.value = "";
-                      }}
-                    />
-                  </label>
-                </div>
-
-                {/* Textures intégrées */}
-                <div className="texture-list">
-                  {[
-                    {
-                      key: "textures/Pike-002.png",
-                      name: "Pike 1",
-                    },
-                    {
-                      key: "textures/Pike_003.png",
-                      name: "Pike 2",
-                    },
-                  ].map((tex) => (
-                    <button
-                      key={tex.key}
-                      type="button"
-                      className={`texture-item${
-                        selectedTexture === tex.key ? " texture-item--active" : ""
-                      }`}
-                      onClick={() =>
-                        setSelectedTexture((current) =>
-                          current === tex.key ? null : tex.key,
-                        )
-                      }
-                    >
-                      <div className="texture-thumb texture-thumb--pike" />
-                      <div className="texture-meta">
-                        <span className="texture-name">{tex.name}</span>
-                        <span className="texture-tag">
-                          {selectedTexture === tex.key
-                            ? "Utilisée sur le leurre"
-                            : "Cliquer pour appliquer"}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Textures importées localement */}
-                {localTextures.length > 0 && (
-                  <>
-                    <span
-                      className="assets-section-title"
-                      style={{ display: "block", marginTop: 12, marginBottom: 4 }}
-                    >
-                      Textures importées (local)
-                    </span>
-                    <div className="texture-list">
-                      {localTextures.map((tex) => (
-                        <button
-                          key={tex.id}
-                          type="button"
-                          className={`texture-item${
-                            selectedTexture === tex.url
-                              ? " texture-item--active"
-                              : ""
-                          }`}
-                          onClick={() =>
-                            setSelectedTexture((current) =>
-                              current === tex.url ? null : tex.url,
-                            )
-                          }
-                        >
-                          <div
-                            className="texture-thumb"
-                            style={{
-                              backgroundImage: `url(${tex.url})`,
-                            }}
-                          />
-                          <div className="texture-meta">
-                            <span className="texture-name">{tex.name}</span>
-                            <span className="texture-tag">
-                              {selectedTexture === tex.url
-                                ? "Utilisée sur le leurre"
-                                : "Cliquer pour appliquer"}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <div className="color-picker-row" style={{ marginTop: 12 }}>
-                  <span>Angle texture</span>
-                  <input
-                    type="range"
-                    min={-180}
-                    max={180}
-                    step={1}
-                    value={textureRotation}
-                    onChange={(e) => setTextureRotation(Number(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ width: 48, textAlign: "right" }}>
-                    {textureRotation}°
-                  </span>
-                </div>
-                <div className="color-picker-row" style={{ marginTop: 8 }}>
-                  <span>Taille texture</span>
-                  <input
-                    type="range"
-                    min={0.25}
-                    max={4}
-                    step={0.05}
-                    value={textureScale}
-                    onChange={(e) => setTextureScale(Number(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ width: 48, textAlign: "right" }}>
-                    x
-                    {textureScale.toFixed(2)}
-                  </span>
-                </div>
-                <div className="color-picker-row" style={{ marginTop: 8 }}>
-                  <span>Visibilité texture</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={textureStrength}
-                    onChange={(e) =>
-                      setTextureStrength(Number(e.target.value))
-                    }
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ width: 48, textAlign: "right" }}>
-                    {Math.round(textureStrength * 100)}
-                    %
-                  </span>
-                </div>
-                <div className="color-picker-row" style={{ marginTop: 8 }}>
-                  <span>Flou texture</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={textureBlur}
-                    onChange={(e) => setTextureBlur(Number(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ width: 48, textAlign: "right" }}>
-                    {Math.round(textureBlur * 100)}
-                    %
-                  </span>
-                </div>
-                <div className="color-picker-row" style={{ marginTop: 8 }}>
-                  <span>Écailles</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={scalesStrength}
-                    onChange={(e) =>
-                      setScalesStrength(Number(e.target.value))
-                    }
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ width: 48, textAlign: "right" }}>
-                    {Math.round(scalesStrength * 100)}
-                    %
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {leftMainTab === "assets" && assetsView === "models" && (
-              <div>
-                <div className="assets-back-row">
-                  <button
-                    type="button"
-                    className="assets-back-btn"
-                    onClick={() => setAssetsView("root")}
-                  >
-                    ← Assets
-                  </button>
-                  <span className="assets-section-title">Modèles</span>
-                </div>
-                {/* Import local de modèles GLB */}
-                <div style={{ marginBottom: 8 }}>
-                  <label
-                    className="secondary-btn"
-                    style={{
-                      width: "100%",
-                      justifyContent: "center",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Importer un modèle (.glb)
-                    <input
-                      type="file"
-                      accept=".glb"
-                      multiple
-                      style={{ display: "none" }}
-                      onChange={(event) => {
-                        const files = Array.from(event.target.files || []);
-                        if (!files.length) return;
-                        const now = Date.now();
-                        const newEntries = files.map((file, index) => ({
-                          id: `${now}-${index}-${file.name}`,
-                          name: file.name.replace(/\.glb$/i, ""),
-                          url: URL.createObjectURL(file),
-                          previewUrl: null,
-                        }));
-                        setLocalModels((prev) => [...prev, ...newEntries]);
-                        const last = newEntries[newEntries.length - 1];
-                        setSelectedLocalModelId(last.id);
-                        // On utilise un type générique pour les modèles locaux
-                        setModelType("Custom");
-                        // reset input pour permettre de réimporter le même fichier
-                        event.target.value = "";
-                      }}
-                    />
-                  </label>
-                </div>
-
-                {/* Modèles intégrés */}
-                <div className="model-list" style={{ marginTop: 4 }}>
-                  {["LurePret5", "LureDouble", "Shad", "Shad2"].map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      className={`model-item${
-                        modelType === type && !selectedLocalModel
-                          ? " model-item--active"
-                          : ""
-                      }`}
-                      onClick={() => {
-                        setSelectedLocalModelId(null);
-                        setModelType(type);
-                      }}
-                    >
-                      <span className="model-name">{type}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Modèles importés en local */}
-                {localModels.length > 0 && (
-                  <>
-                    <span
-                      className="assets-section-title"
-                      style={{ display: "block", marginTop: 10 }}
-                    >
-                      Modèles importés (local)
-                    </span>
-                    <div className="model-list" style={{ marginTop: 4 }}>
-                      {localModels.map((m) => (
-                        <div
-                          key={m.id}
-                          className={`model-item${
-                            selectedLocalModelId === m.id
-                              ? " model-item--active"
-                              : ""
-                          }`}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 6,
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-                            <button
-                              type="button"
-                              style={{
-                                all: "unset",
-                                cursor: "pointer",
-                                flex: 1,
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                              }}
-                              onClick={() => {
-                                setSelectedLocalModelId(m.id);
-                                setModelType("Custom");
-                              }}
-                            >
-                              {m.previewUrl ? (
-                                <img
-                                  src={m.previewUrl}
-                                  alt={m.name}
-                                  className="model-thumb"
-                                />
-                              ) : (
-                                <div className="model-thumb model-thumb--placeholder">
-                                  {m.name.slice(0, 2).toUpperCase()}
-                                </div>
-                              )}
-                              <span className="model-name">{m.name}</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              style={{ padding: "2px 6px", fontSize: 11 }}
-                              onClick={() => {
-                                setLocalModels((prev) =>
-                                  prev.filter((x) => x.id !== m.id),
-                                );
-                                if (selectedLocalModelId === m.id) {
-                                  setSelectedLocalModelId(null);
-                                }
-                              }}
-                            >
-                              Suppr
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            className="secondary-btn"
-                            style={{ padding: "2px 6px", fontSize: 11 }}
-                            onClick={() => {
-                              if (!glRef.current || selectedLocalModelId !== m.id) {
-                                setSelectedLocalModelId(m.id);
-                                setModelType("Custom");
-                              }
-                              if (!glRef.current) return;
-                              const dataUrl =
-                                glRef.current.domElement.toDataURL("image/png");
-                              setLocalModels((prev) =>
-                                prev.map((x) =>
-                                  x.id === m.id ? { ...x, previewUrl: dataUrl } : x,
-                                ),
-                              );
-                            }}
-                          >
-                            Vignette
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Bouton retour + email / compte utilisateur tout en bas de la colonne gauche */}
-          <div className="editor-sidebar-footer">
-            <button
-              type="button"
-              className="secondary-btn"
-              onClick={() => navigate("/")}
-              style={{ width: "100%", marginBottom: 8 }}
-            >
-              Retour à la liste
-            </button>
-            {user ? (
-              <div className="user-chip">
-                <span className="user-email">{user.email}</span>
-                <button
-                  type="button"
-                  className="user-logout-btn"
-                  onClick={() => supabase.auth.signOut()}
-                >
-                  Déconnexion
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={() => navigate("/auth")}
-                style={{ width: "100%" }}
-              >
-                Se connecter
-              </button>
-            )}
-          </div>
-        </aside>
-
         {/* Popup de sauvegarde locale (Modifier / Nouveau / Annuler) */}
         {saveDialogOpen && pendingLocalSave && (
           <div className="save-dialog-backdrop">
@@ -2343,6 +1988,11 @@ function CreateLurePage() {
               textureBlur={textureBlur}
               textureStrength={textureStrength}
               scalesStrength={scalesStrength}
+              textureRepeat={textureRepeat}
+              textureOffsetU={textureOffsetU}
+              textureOffsetV={textureOffsetV}
+              textureMarkColor={textureMarkColor}
+              textureMarkStrength={textureMarkStrength}
               paletteType={modelType === "CollectionTest" ? paletteType : null}
               tripleSize={modelType === "Lurepret" ? tripleSize : null}
               frontTripleSize={
@@ -2356,10 +2006,18 @@ function CreateLurePage() {
                   : null
               }
               backPaletteType={modelType === "LurePret5" ? backPaletteType : null}
+              // Pour l'instant, la bavette n'est pas encore attachée en 3D,
+              // mais on garde le type sélectionné prêt pour une prochaine étape.
+              bavetteType={bavetteType}
+              // Pack de bavettes actuellement sélectionné (intégré ou importé)
+              bavettePackUrl={selectedBavettePackUrl}
               eyeWhiteColor={eyeWhiteColor}
               eyeIrisColor={eyeIrisColor}
+              eyeGlowColor={eyeGlowColor}
+              eyeGlowStrength={eyeGlowStrength}
               lureSize={lureSize}
               onComputedDimensionsCm={setCurrentDimensionsCm}
+              onHasBavetteSocketChange={setHasBavetteSocket}
             />
             {/* Axes mondes X/Y/Z avec petits traits et graduations,
                 rassemblés dans un composant dédié (optionnel via showAxes) */}
@@ -2408,6 +2066,463 @@ function CreateLurePage() {
               <span>Dimensions en cours de calcul…</span>
             )}
           </div>
+
+          {/* Barre d'assets horizontale façon Blender : Modèles / Textures / Bavettes */}
+          <div className="asset-dock">
+            <div className="asset-dock-tabs">
+              <button
+                type="button"
+                className={`asset-dock-tab-btn${
+                  assetDockTab === "models" ? " asset-dock-tab-btn--active" : ""
+                }`}
+                onClick={() => setAssetDockTab("models")}
+              >
+                Modèles
+              </button>
+              <button
+                type="button"
+                className={`asset-dock-tab-btn${
+                  assetDockTab === "textures" ? " asset-dock-tab-btn--active" : ""
+                }`}
+                onClick={() => setAssetDockTab("textures")}
+              >
+                Textures
+              </button>
+              <button
+                type="button"
+                className={`asset-dock-tab-btn${
+                  assetDockTab === "bavettes" ? " asset-dock-tab-btn--active" : ""
+                }`}
+                onClick={() => setAssetDockTab("bavettes")}
+              >
+                Bavettes
+              </button>
+            </div>
+
+            <div className="asset-dock-main">
+              {assetDockTab === "models" && (
+                <div className="asset-dock-row">
+                  <div className="asset-dock-items">
+                    {/* Import local de modèles GLB */}
+                    <div style={{ marginBottom: 8 }}>
+                      <label
+                        className="secondary-btn"
+                        style={{
+                          width: "100%",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Importer un modèle (.glb)
+                        <input
+                          type="file"
+                          accept=".glb"
+                          multiple
+                          style={{ display: "none" }}
+                          onChange={(event) => {
+                            const files = Array.from(event.target.files || []);
+                            if (!files.length) return;
+                            const now = Date.now();
+                            const newEntries = files.map((file, index) => ({
+                              id: `${now}-${index}-${file.name}`,
+                              name: file.name.replace(/\.glb$/i, ""),
+                              url: URL.createObjectURL(file),
+                              previewUrl: null,
+                            }));
+                            setLocalModels((prev) => [...prev, ...newEntries]);
+                            const last = newEntries[newEntries.length - 1];
+                            setSelectedLocalModelId(last.id);
+                            // On utilise un type générique pour les modèles locaux
+                            setModelType("Custom");
+                            // reset input pour permettre de réimporter le même fichier
+                            event.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {/* Modèles intégrés */}
+                    <span className="asset-dock-section-title">
+                      Modèles intégrés
+                    </span>
+                    <div className="model-list model-list--grid" style={{ marginTop: 4 }}>
+                      {[
+                        "LurePret5",
+                        "LureDouble",
+                        "Shad",
+                        "Shad2",
+                        "LureTop",
+                        "LureTop3",
+                      ].map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className={`model-item model-item--thumb-only${
+                            modelType === type && !selectedLocalModel
+                              ? " model-item--active"
+                              : ""
+                          }`}
+                          onClick={() => {
+                            setSelectedLocalModelId(null);
+                            setModelType(type);
+                          }}
+                        >
+                          <div className="model-thumb model-thumb--placeholder">
+                            {type.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="model-name">{type}</div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Modèles importés en local */}
+                    {localModels.length > 0 && (
+                      <>
+                        <span
+                          className="asset-dock-section-title"
+                          style={{ display: "block", marginTop: 10 }}
+                        >
+                          Modèles importés (local)
+                        </span>
+                        <div className="model-list model-list--grid" style={{ marginTop: 4 }}>
+                          {localModels.map((m) => (
+                            <div
+                              key={m.id}
+                              className={`model-item model-item--thumb-only${
+                                selectedLocalModelId === m.id
+                                  ? " model-item--active"
+                                  : ""
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                className="model-thumb-button"
+                                onClick={() => {
+                                  setSelectedLocalModelId(m.id);
+                                  setModelType("Custom");
+                                }}
+                              >
+                                {m.previewUrl ? (
+                                  <img
+                                    src={m.previewUrl}
+                                    alt={m.name}
+                                    className="model-thumb"
+                                  />
+                                ) : (
+                                  <div className="model-thumb model-thumb--placeholder">
+                                    {m.name.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="model-name">{m.name}</div>
+                              </button>
+                              <button
+                                type="button"
+                                className="model-thumb-delete"
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  setLocalModels((prev) =>
+                                    prev.filter((x) => x.id !== m.id),
+                                  );
+                                  if (selectedLocalModelId === m.id) {
+                                    setSelectedLocalModelId(null);
+                                  }
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {assetDockTab === "textures" && (
+                <div className="asset-dock-row">
+                  <div className="asset-dock-packs">
+                    <div className="asset-dock-section-title">
+                      Packs de textures
+                    </div>
+                    <div className="asset-dock-pack-list">
+                      <button
+                        type="button"
+                        className={`asset-dock-pack-btn${
+                          textureLibrary === "builtin"
+                            ? " asset-dock-pack-btn--active"
+                            : ""
+                        }`}
+                        onClick={() => setTextureLibrary("builtin")}
+                      >
+                        Intégrées
+                      </button>
+                      <button
+                        type="button"
+                        className={`asset-dock-pack-btn${
+                          textureLibrary === "local"
+                            ? " asset-dock-pack-btn--active"
+                            : ""
+                        }`}
+                        disabled={localTextures.length === 0}
+                        onClick={() => setTextureLibrary("local")}
+                      >
+                        Importées (local)
+                      </button>
+                    </div>
+                    <label
+                      className="secondary-btn asset-dock-import-btn"
+                      style={{ cursor: "pointer" }}
+                    >
+                      Ajouter des textures (.png)
+                      <input
+                        type="file"
+                        accept=".png"
+                        multiple
+                        style={{ display: "none" }}
+                        onChange={(event) => {
+                          const files = Array.from(event.target.files || []);
+                          if (!files.length) return;
+                          const now = Date.now();
+                          const entries = files.map((file, index) => ({
+                            id: `${now}-${index}-${file.name}`,
+                            name: file.name.replace(/\.[^.]+$/i, ""),
+                            url: URL.createObjectURL(file),
+                          }));
+                          setLocalTextures((prev) => [...prev, ...entries]);
+                          setTextureLibrary("local");
+                          // reset input pour pouvoir réimporter le même fichier si besoin
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="asset-dock-items">
+                    {textureLibrary === "builtin" && (
+                      <div className="texture-list">
+                        {[
+                          {
+                            key: "textures/Pike-002.png",
+                            name: "Pike 1",
+                          },
+                          {
+                            key: "textures/Pike_003.png",
+                            name: "Pike 2",
+                          },
+                        ].map((tex) => (
+                          <button
+                            key={tex.key}
+                            type="button"
+                            className={`texture-item${
+                              selectedTexture === tex.key
+                                ? " texture-item--active"
+                                : ""
+                            }`}
+                            onClick={() =>
+                              setSelectedTexture((current) =>
+                                current === tex.key ? null : tex.key,
+                              )
+                            }
+                          >
+                            <div className="texture-thumb texture-thumb--pike" />
+                            <div className="texture-meta">
+                              <span className="texture-name">{tex.name}</span>
+                              <span className="texture-tag">
+                                {selectedTexture === tex.key
+                                  ? "Utilisée sur le leurre"
+                                  : "Cliquer pour appliquer"}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {textureLibrary === "local" && localTextures.length > 0 && (
+                      <div className="texture-list">
+                        {localTextures.map((tex) => (
+                          <div
+                            key={tex.id}
+                            className={`texture-item${
+                              selectedTexture === tex.url
+                                ? " texture-item--active"
+                                : ""
+                            }`}
+                          >
+                            <div
+                              className="texture-thumb-wrapper"
+                              onClick={() =>
+                                setSelectedTexture((current) =>
+                                  current === tex.url ? null : tex.url,
+                                )
+                              }
+                            >
+                              <div
+                                className="texture-thumb"
+                                style={{
+                                  backgroundImage: `url(${tex.url})`,
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="texture-delete-btn"
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  setLocalTextures((prev) =>
+                                    prev.filter((x) => x.id !== tex.id),
+                                  );
+                                  if (selectedTexture === tex.url) {
+                                    setSelectedTexture(null);
+                                  }
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                            <div className="texture-meta">
+                              <span className="texture-name">{tex.name}</span>
+                              <span className="texture-tag">
+                                {selectedTexture === tex.url
+                                  ? "Utilisée sur le leurre"
+                                  : "Cliquer pour appliquer"}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {textureLibrary === "local" && localTextures.length === 0 && (
+                      <p className="asset-dock-empty-text">
+                        Aucune texture locale importée pour le moment.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {assetDockTab === "bavettes" && (
+                <div className="asset-dock-row">
+                  <div className="asset-dock-packs">
+                    <div className="asset-dock-section-title">
+                      Packs de bavettes
+                    </div>
+                    <label
+                      className="secondary-btn asset-dock-import-btn"
+                      style={{ cursor: "pointer" }}
+                    >
+                      Importer un pack de bavettes (.glb)
+                      <input
+                        type="file"
+                        accept=".glb"
+                        multiple
+                        style={{ display: "none" }}
+                        onChange={(event) => {
+                          const files = Array.from(event.target.files || []);
+                          if (!files.length) return;
+                          const now = Date.now();
+                          const newEntries = files.map((file, index) => ({
+                            id: `${now}-${index}-${file.name}`,
+                            name: file.name.replace(/\.glb$/i, ""),
+                            url: URL.createObjectURL(file),
+                          }));
+                          setLocalBavettePacks((prev) => [...prev, ...newEntries]);
+                          const last = newEntries[newEntries.length - 1];
+                          setSelectedBavettePackUrl(last.url);
+                          setActiveToolTab("bavette");
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+
+                    <div className="asset-dock-pack-list">
+                      <button
+                        type="button"
+                        className={`asset-dock-pack-btn${
+                          !selectedBavettePackUrl
+                            ? " asset-dock-pack-btn--active"
+                            : ""
+                        }`}
+                        onClick={() => {
+                          setSelectedBavettePackUrl(null);
+                          setActiveToolTab("bavette");
+                        }}
+                      >
+                        Pack intégré (Pack_Bavette7)
+                      </button>
+
+                      {localBavettePacks.length > 0 &&
+                        localBavettePacks.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className={`asset-dock-pack-btn${
+                              selectedBavettePackUrl === p.url
+                                ? " asset-dock-pack-btn--active"
+                                : ""
+                            }`}
+                            onClick={() => {
+                              setSelectedBavettePackUrl(p.url);
+                              setActiveToolTab("bavette");
+                            }}
+                          >
+                            {p.name}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="asset-dock-items">
+                    {bavetteOptions && bavetteOptions.length > 0 ? (
+                      <div className="bavette-grid">
+                        {bavetteOptions.map((opt) =>
+                          opt.key === null ? null : (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              className={`bavette-card${
+                                bavetteType === opt.key
+                                  ? " bavette-card--active"
+                                  : ""
+                              }`}
+                              onClick={() =>
+                                setBavetteType((current) =>
+                                  current === opt.key ? null : opt.key,
+                                )
+                              }
+                            >
+                              <div
+                                className="bavette-card-thumb"
+                                style={
+                                  bavetteThumbnails[opt.key]
+                                    ? {
+                                        backgroundImage: `url(${bavetteThumbnails[opt.key]})`,
+                                        backgroundSize: "contain",
+                                        backgroundRepeat: "no-repeat",
+                                        backgroundPosition: "center",
+                                      }
+                                    : undefined
+                                }
+                              />
+                              <span className="bavette-card-label">
+                                {opt.label}
+                              </span>
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    ) : (
+                      <p className="asset-dock-empty-text">
+                        Aucun mesh commençant par &quot;Bavette&quot; trouvé dans
+                        le pack sélectionné.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <CreateLureSidebar
@@ -2425,6 +2540,8 @@ function CreateLurePage() {
           setBackTripleSize={setBackTripleSize}
           backPaletteType={backPaletteType}
           setBackPaletteType={setBackPaletteType}
+          bavetteType={bavetteType}
+          setBavetteType={setBavetteType}
           gradientTop={gradientTop}
           setGradientTop={setGradientTop}
           gradientMiddle={gradientMiddle}
@@ -2449,6 +2566,10 @@ function CreateLurePage() {
           setEyeWhiteColor={setEyeWhiteColor}
           eyeIrisColor={eyeIrisColor}
           setEyeIrisColor={setEyeIrisColor}
+          eyeGlowColor={eyeGlowColor}
+          setEyeGlowColor={setEyeGlowColor}
+          eyeGlowStrength={eyeGlowStrength}
+          setEyeGlowStrength={setEyeGlowStrength}
           lureSize={lureSize}
           setLureSize={setLureSize}
           paletteType={paletteType}
@@ -2465,6 +2586,24 @@ function CreateLurePage() {
           setTextureStrength={setTextureStrength}
           scalesStrength={scalesStrength}
           setScalesStrength={setScalesStrength}
+          textureRepeat={textureRepeat}
+          setTextureRepeat={setTextureRepeat}
+          textureOffsetU={textureOffsetU}
+          setTextureOffsetU={setTextureOffsetU}
+          textureOffsetV={textureOffsetV}
+          setTextureOffsetV={setTextureOffsetV}
+          textureMarkColor={textureMarkColor}
+          setTextureMarkColor={setTextureMarkColor}
+          textureMarkStrength={textureMarkStrength}
+          setTextureMarkStrength={setTextureMarkStrength}
+          hasBavetteSocket={
+            hasBavetteSocket ||
+            modelType === "LureTop" ||
+            modelType === "LureTop3"
+          }
+          activeToolTab={activeToolTab}
+          setActiveToolTab={setActiveToolTab}
+          bavetteOptions={bavetteOptions}
           showAxes={showAxes}
           setShowAxes={setShowAxes}
           error={error}

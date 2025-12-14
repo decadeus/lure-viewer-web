@@ -146,3 +146,57 @@ Pour que les textures fonctionnent bien dans l’app (mode “mask” type pike,
 - Facultatif : tu peux utiliser des gris pour des intensités intermédiaires, mais le contraste principal doit rester **noir sur blanc**.
 
 Les fichiers doivent être placés dans `public/textures/` (par exemple : `Pike-002.png`, `Pike_003.png`) et pourront être référencés dans l’app via leur chemin relatif (`textures/MonMotif.png`).
+
+---
+
+### Halo / contour autour des yeux (préparation Blender)
+
+Pour ajouter plus tard un **effet de halo coloré autour des yeux** contrôlable dans l’app, il est conseillé de préparer la géométrie directement dans Blender :
+
+- Créer, autour de chaque œil, un petit **anneau ou disque** séparé (mesh distinct) qui suit la forme de la tête.  
+- Nommer ces meshes, par exemple :
+  - `EyeGlow_L` pour l’anneau autour de l’œil gauche,  
+  - `EyeGlow_R` pour l’anneau autour de l’œil droit.  
+- Les faire **enfant du corps** du leurre, comme pour les autres éléments.
+
+L’app pourra ensuite :
+
+- détecter automatiquement `EyeGlow_L` / `EyeGlow_R`,  
+- proposer des contrôles pour **la couleur** du halo et éventuellement **la taille** (scale du mesh) ou l’**intensité** (émission du matériau).
+
+Ainsi, le créateur garde un contrôle précis sur la forme et la position du halo, et l’app ne fait que piloter les paramètres visuels.
+
+---
+
+### Packs fabricants (triples, palettes, bavettes)
+
+L’app pourra aussi accueillir, plus tard, des **packs officiels fournis par des fabricants** (triples, palettes, bavettes).  
+L’idée : un fabricant prépare un `.glb` propre, que l’app peut charger comme une bibliothèque d’accessoires, avec une intégration standardisée.
+
+#### 1. Triples
+
+- 1 fichier `.glb` par **gamme** de triples (par ex. `Brand_Triple_Premium.glb`).  
+- Chaque triple est un mesh séparé, nommé de façon claire, par ex. :
+  - `BrandTriple_#4`, `BrandTriple_#6`, `BrandTriple_#2`…  
+- Un **Empty** est placé exactement dans l’anneau d’attache du triple (l’œillet).  
+  - Nom recommandé de l’Empty : `AttachHook` (ou `Attach_Hook`) pour tout le pack.  
+- L’app peut alors :
+  - aligner le triple sur les sockets du leurre (`Attach_Down_add`, `Attach_Back_Add`, etc.),  
+  - afficher la **marque + modèle + taille** dans l’UI (sélection de triple par marque).
+
+#### 2. Palettes (spoons, blades…)
+
+- Même principe :
+  - 1 fichier `.glb` par gamme de palettes (`Brand_Palettes.glb`).  
+  - Une palette = 1 mesh, par ex. `BrandPalette_Small`, `BrandPalette_Medium`, `BrandPalette_Large`.  
+  - Un Empty dans l’anneau (ou l’agrafe) de la palette, nom standard : `AttachPalette`.  
+- L’app peut les attacher sur les sockets de type `Palette_Attach_*` ou `Attach_Back_Add` selon le design.
+
+#### 3. Bavettes (lips)
+
+- Les bavettes peuvent aussi être présentes dans un pack :
+  - meshes nommés **en commençant par** `Bavette` (par ex. `BavetteM`, `BavetteL`, `BavetteXL`, `Bavette_Tube`…).  
+  - Empty au centre du trou / de la zone d’assemblage, nom standard : `AttachLip`.  
+- Le viewer peut alors activer/désactiver ces bavettes par modèle et proposer des presets de nage selon la bavette choisie.
+
+En respectant ces conventions (noms d’objets, Empty placé dans l’œillet, unités cohérentes), un fabricant peut préparer un pack `.glb` que l’app intégrera facilement comme **bibliothèque de composants** (triples, palettes, bavettes) sélectionnables par l’utilisateur.
