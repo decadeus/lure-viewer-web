@@ -166,10 +166,6 @@ export function CreateLureSidebar({
 }) {
   return (
     <aside className="sidebar">
-      <div className="sidebar-header">
-        <h1 className="app-title">Nouveau leurre</h1>
-      </div>
-
       {/* Bouton Sauvegarder juste sous l'en-tête */}
       <button
         type="submit"
