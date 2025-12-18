@@ -244,6 +244,19 @@
   overflow-y: auto;
 }
 
+.sidebar-doc-link {
+  margin-top: 8px;
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid #4b5563;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  background: #020617;
+  color: #e5e7eb;
+  cursor: pointer;
+  text-align: center;
+}
+
 .asset-dock-empty-text {
   margin: 0;
   font-size: 0.78rem;

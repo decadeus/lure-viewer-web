@@ -737,6 +737,8 @@ export function CreateLureSidebar({
           )}
         </form>
       </div>
+
+      {/* Lien de documentation Blender désactivé car la page /doc a été supprimée */}
     </aside>
   );
 }
