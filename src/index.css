@@ -7,6 +7,38 @@
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
 
+  /* Design tokens globaux (thème sombre façon Blender) */
+  --bg-shell: rgba(35, 35, 35, 0.96); /* panneaux (top, sidebar, dock) */
+  --bg-panel: #18181b; /* cartes / items / sous-panneaux */
+  --bg-deep: #020617; /* zones très sombres (barres, boutons) */
+  --bg-surface: #111827; /* états actifs / panneaux accentués */
+  --border-subtle: #27272f;
+  --border-strong: #3f3f46;
+  --border-dark: #1f2937;
+  --border-accent: #4b5563;
+  --border-primary: #4b5563; /* trait principal (ex: séparateurs) */
+  --text-primary: #e5e5e5;
+  --text-muted: #9ca3af;
+  --text-soft: #6b7280;
+  --text-strong: #f9fafb;
+  --text-dark: #111827; /* texte foncé sur fonds clairs (docs, cartes blanches) */
+
+  /* Surfaces claires (cartes “home”, filtres, etc.) */
+  --bg-light: #f9f9f9;
+  --border-light: #d1d5db;
+
+  /* Accent de sélection (bleu) */
+  --accent-selected-bg: #5476be;
+  --accent-selected-border: #1d4ed8;
+  --accent-selected-text: #f9fafb;
+
+  /* Échelle typographique (5 tailles principales) */
+  --fs-xs: 0.7rem;  /* légendes, badges */
+  --fs-sm: 0.78rem; /* labels, UI compacte */
+  --fs-md: 0.8rem;  /* texte standard */
+  --fs-lg: 0.9rem;  /* sous-titres, titres de section */
+  --fs-xl: 1.1rem;  /* titres principaux */
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

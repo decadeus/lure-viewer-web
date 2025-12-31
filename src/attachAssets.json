@@ -1,0 +1,16 @@
+[
+  {
+    "id": "terminal-tackle",
+    "name": "Terminal tackle",
+    "file": "Terminal tackle.glb"
+  },
+  {
+    "id": "split_ring",
+    "name": "split ring",
+    "file": "split_ring.glb",
+    "image": "sample/anneau.png"
+  }
+]
+
+
+

@@ -124,8 +124,9 @@ const PlasticGradientMaterial = shaderMaterial(
       vec3 H = normalize(L + V);
 
       float NdotL = max(dot(N, L), 0.0);
-      // jamais complètement noir
-      float diffuse = 0.25 + 0.75 * NdotL;
+      // jamais complètement noir, et beaucoup plus proche de la couleur pure
+      // (0.6 = "ambiante" minimale, 1.0 quand la lumière frappe en plein)
+      float diffuse = 0.6 + 0.4 * NdotL;
 
       // specular "plastic/metal"
       float shininess = mix(12.0, 80.0, glossiness);

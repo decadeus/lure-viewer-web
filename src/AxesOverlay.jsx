@@ -1,10 +1,10 @@
 import React from "react";
 import { Line, Html } from "@react-three/drei";
 
-// Axes mondes avec petits traits de repère tous les 1 cm (approximatif),
-// en utilisant la conversion unités 3D -> cm calculée via Taille_M.
+// Axes mondes avec petits traits de repère tous les 1 (unité physique : cm ou inch
+// selon la conversion que lui envoie CreateLurePage).
 // maxCm est automatiquement ajusté pour couvrir la longueur du leurre.
-export function AxesWithTicks({ worldPerCm, lengthCm, paddingCm = 2, defaultMaxCm = 10 }) {
+export function AxesWithTicks({ worldPerCm, lengthCm, paddingCm = 2, defaultMaxCm = 5 }) {
   if (!worldPerCm || !Number.isFinite(worldPerCm) || worldPerCm <= 0) {
     // Fallback : axes simples sans repères si on n'a pas la conversion
     return (

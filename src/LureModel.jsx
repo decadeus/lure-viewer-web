@@ -23,6 +23,12 @@ function getModelPath(modelType) {
       return `${import.meta.env.BASE_URL}models/LureTop.glb`;
     case "LureTop3":
       return `${import.meta.env.BASE_URL}models/LureTop3.glb`;
+    case "TEestCubeglb":
+      return `${import.meta.env.BASE_URL}models/TEestCubeglb.glb`;
+    case "TEestCubeglb2":
+      return `${import.meta.env.BASE_URL}models/TEestCubeglb2.glb`;
+    case "TEestCubeglb14":
+      return `${import.meta.env.BASE_URL}models/TEestCubeglb14.glb`;
     default:
       // Fallback : tous les anciens modèles pointent maintenant sur LurePret7
       return `${import.meta.env.BASE_URL}models/LurePret7.glb`;
@@ -133,9 +139,15 @@ export function LureModel({
   bavetteType = null, // ex: "BavetteM" / "BavetteL" pour LureTop
   bavettePackUrl = null, // chemin/URL du pack de bavettes (null => pack intégré)
   lureSize = "M", // "M" (base), "L" (x1.25), "XL" (x1.5)
+  sizePresetsInch = null, // ex: [2, 2.5, 4] si défini dans Blender
+  selectedSizeInch = null, // valeur actuelle en inch
   onComputedDimensionsCm = null,
   onHasBavetteSocketChange = null,
   onModelMetadataChange = null,
+  selectedPart = null,
+  onBodyClick = null,
+  onEyesClick = null,
+  showEyes = true,
 }) {
   const modelPath = modelUrl || getModelPath(modelType);
   const gltf = useGLTF(modelPath);
@@ -193,6 +205,7 @@ export function LureModel({
         fabricant: "",
         modele: "",
         name: "",
+        sizesInchRaw: "",
       };
 
       const applyFrom = (ud = {}) => {
@@ -223,6 +236,14 @@ export function LureModel({
         }
         if (!collected.name) {
           collected.name = ud.Name || ud.name || "";
+        }
+        if (!collected.sizesInchRaw) {
+          collected.sizesInchRaw =
+            ud.SizesInch ||
+            ud.sizesInch ||
+            ud.LureSizesInch ||
+            ud.lureSizesInch ||
+            "";
         }
       };
 
@@ -289,9 +310,41 @@ export function LureModel({
     // }
 
     // 1) Calibration unités 3D -> centimètres via un cube de référence
+    //    ou via une Custom Property cmPerWorldUnit placée sur un objet Blender.
+    if (!scene.userData.cmPerWorldUnit) {
+      // D'abord, essayer de récupérer cmPerWorldUnit depuis un des enfants,
+      // au cas où la propriété aurait été mise sur l'objet principal dans Blender.
+      let hintedCmPerWorld = null;
+      scene.traverse((child) => {
+        if (hintedCmPerWorld != null) return;
+        const ud = child.userData;
+        if (
+          ud &&
+          typeof ud.cmPerWorldUnit === "number" &&
+          ud.cmPerWorldUnit > 0
+        ) {
+          hintedCmPerWorld = ud.cmPerWorldUnit;
+        }
+      });
+      if (hintedCmPerWorld != null) {
+        scene.userData.cmPerWorldUnit = hintedCmPerWorld;
+      }
+    }
+
     if (!scene.userData.cmPerWorldUnit) {
       let refCube = null;
       let refLengthCm = 4.0; // valeur par défaut
+
+      // Cas particulier : modèle personnalisé avec cube de calibration local.
+      // Si le GLB contient un objet nommé "Ref_Inch" dont la longueur réelle
+      // correspond à 1 inch, on s'en sert pour déduire cmPerWorldUnit.
+      if (!refCube) {
+        const localRef = scene.getObjectByName("Ref_Inch");
+        if (localRef) {
+          refCube = localRef;
+          refLengthCm = 2.54; // 1 inch en centimètres
+        }
+      }
 
       // Cas particulier : LureDouble possède ses propres cubes de référence
       if (modelType === "LureDouble" && doubleRefGltf?.scene) {
@@ -382,8 +435,17 @@ export function LureModel({
     // Ajuster la taille globale du leurre sans modifier la taille apparente
     // des accessoires (triples / palettes) : on appliquera l'inverse lors
     // de l'attache dans `attachTripleToLure` / `attachPaletteToLure`.
-    const sizeScale =
-      lureSize === "XL" ? 1.5 : lureSize === "L" ? 1.25 : 1.0;
+    // - Cas 1 : tailles prédéfinies M / L / XL (leurres intégrés)
+    // - Cas 2 : tailles physiques en inch fournies par Blender (sizePresetsInch)
+    let sizeScale = 1.0;
+    if (Array.isArray(sizePresetsInch) && sizePresetsInch.length > 0 && selectedSizeInch) {
+      const baseInch = sizePresetsInch[0];
+      if (baseInch > 0) {
+        sizeScale = selectedSizeInch / baseInch;
+      }
+    } else {
+      sizeScale = lureSize === "XL" ? 1.5 : lureSize === "L" ? 1.25 : 1.0;
+    }
     if (scene.userData.currentSizeScale !== sizeScale) {
       const fromScale = scene.userData.currentSizeScale || 1;
       const factor = sizeScale / fromScale;
@@ -490,6 +552,10 @@ export function LureModel({
         matName.includes("iris");
 
       if (!isEyeMesh) return;
+      if (!showEyes) {
+        child.visible = false;
+        return;
+      }
 
       const isWhitePart =
         rawName.startsWith("Blanc") ||
@@ -820,7 +886,11 @@ export function LureModel({
               material.uniforms.blurRadius.value = textureBlur;
             }
             if (material.uniforms.textureStrength) {
-              material.uniforms.textureStrength.value = textureStrength;
+              // Si aucune texture Pike n'est active, on met la force de texture à 0
+              // pour éviter que le shader n'assombrisse tout le leurre (cas map == null).
+              material.uniforms.textureStrength.value = hasTexture
+                ? textureStrength
+                : 0;
             }
             if (material.uniforms.markColor) {
               const mc = new THREE.Color(textureMarkColor || "#000000");
@@ -1222,6 +1292,8 @@ export function LureModel({
     eyeGlowColor,
     eyeGlowStrength,
     lureSize,
+    sizePresetsInch,
+    selectedSizeInch,
   ]);
 
   // DEBUG texture / matériaux : liste les meshes avec info UV / texture
@@ -1236,7 +1308,41 @@ export function LureModel({
     }
   });
 
-  return <primitive object={scene} />;
+  // Gestion des clics : on utilise les noms de mesh courants pour distinguer
+  // le corps du leurre et les yeux. Si ces noms changent côté Blender, il
+  // suffira d'ajuster cette partie.
+  if (onBodyClick || onEyesClick) {
+    scene.traverse((child) => {
+      if (!child.isMesh) return;
+      const name = (child.name || "").toLowerCase();
+      if (
+        onEyesClick &&
+        (name.includes("eye") || name.includes("oeil") || name.includes("iris"))
+      ) {
+        child.userData._clickTarget = "eyes";
+      } else if (onBodyClick) {
+        // Tout mesh qui n'est pas explicitement un œil est considéré comme corps
+        child.userData._clickTarget = "body";
+      }
+    });
+  }
+
+  // Surbrillance de la partie sélectionnée (corps / yeux) via emissive jaune
+  return (
+    <primitive
+      object={scene}
+      onClick={(event) => {
+        const target = event.object?.userData?._clickTarget;
+        if (target === "eyes" && onEyesClick) {
+          event.stopPropagation();
+          onEyesClick();
+        } else if (target === "body" && onBodyClick) {
+          event.stopPropagation();
+          onBodyClick();
+        }
+      }}
+    />
+  );
 }
 
 // Préchargement des modèles utilisés
@@ -1250,5 +1356,6 @@ useGLTF.preload("/Palettes/PalettesV5.glb");
 useGLTF.preload("/Triple/N_Triple_Asset.glb");
 
 export default LureModel;
+
 
 
