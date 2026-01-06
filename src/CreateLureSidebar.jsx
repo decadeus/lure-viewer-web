@@ -572,160 +572,125 @@ export function CreateLureSidebar({
                 </div>
               )}
 
-              {/* Mode Couleurs : dégradé / couleur du corps */}
+              {/* Mode Couleurs : dégradé / couleur du corps (toujours actif) */}
               {bodyMode === "colors" && (
                 <>
-                  {(
-                    modelType === "LurePret5" ||
-                    modelType === "Shad" ||
-                    modelType === "Shad2" ||
-                    modelType === "Lure11" ||
-                    modelType === "Lure12" ||
-                    modelType === "Lure13" ||
-                    modelType === "Lure14" ||
-                    modelType === "Lure15" ||
-                    modelType === "Lure16" ||
-                    modelType === "Lure17" ||
+                  <div className="color-picker-row">
+                    <span>Couleur haut</span>
+                    <input
+                      type="color"
+                      value={gradientTop}
+                      onChange={(e) => setGradientTop(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row">
+                    <span>Couleur milieu</span>
+                    <input
+                      type="color"
+                      value={gradientMiddle}
+                      onChange={(e) => setGradientMiddle(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row">
+                    <span>Couleur bas</span>
+                    <input
+                      type="color"
+                      value={gradientBottom}
+                      onChange={(e) => setGradientBottom(e.target.value)}
+                    />
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 12 }}>
+                    <span>Degré dégradé haut</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={gradientStrength}
+                      onChange={(e) => setGradientStrength(Number(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ width: 40, textAlign: "right" }}>
+                      {gradientStrength}
+                    </span>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Degré dégradé bas</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={gradientStrength2}
+                      onChange={(e) =>
+                        setGradientStrength2(Number(e.target.value))
+                      }
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ width: 40, textAlign: "right" }}>
+                      {gradientStrength2}
+                    </span>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Positions B / H</span>
+                    <div style={{ flex: 1 }}>
+                      <DualPositionSlider
+                        valueLow={gradientPosition2}
+                        valueHigh={gradientPosition}
+                        onChange={(low, high) => {
+                          setGradientPosition2(low);
+                          setGradientPosition(high);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="color-picker-row" style={{ marginTop: 8 }}>
+                    <span>Angle dégradé</span>
+                    <div className="home-type-filters" style={{ flex: 1 }}>
+                      {[0, 45, 90].map((ang) => (
+                        <button
+                          key={ang}
+                          type="button"
+                          className={`home-type-filter-btn${
+                            gradientAngle === ang
+                              ? " home-type-filter-btn--active"
+                              : ""
+                          }`}
+                          onClick={() => setGradientAngle(ang)}
+                        >
+                          {ang}°
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {(modelType === "Lure17" ||
                     modelType === "Lure18" ||
                     modelType === "Lure19" ||
                     modelType === "Lure20" ||
                     modelType === "Lure21" ||
-                    modelType === "Lure22" ||
-                    modelType === "Lure29" ||
-                    modelType === "TEestCubeglb" ||
-                    modelType === "TEestCubeglb2" ||
-                    modelType === "TEestCubeglb14"
-                  ) ? (
-                    <>
-                      <div className="color-picker-row">
-                        <span>Couleur haut</span>
-                        <input
-                          type="color"
-                          value={gradientTop}
-                          onChange={(e) => setGradientTop(e.target.value)}
-                        />
+                    modelType === "Lure22") && (
+                    <div className="color-picker-row" style={{ marginTop: 8 }}>
+                      <span>Mask</span>
+                      <div className="home-type-filters" style={{ flex: 1 }}>
+                        {[
+                          { key: "none", label: "Aucun" },
+                          { key: "pike", label: "Pike" },
+                          { key: "card", label: "Points" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            className={`home-type-filter-btn${
+                              maskType === opt.key
+                                ? " home-type-filter-btn--active"
+                                : ""
+                            }`}
+                            onClick={() => setMaskType(opt.key)}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
-                      <div className="color-picker-row">
-                        <span>Couleur milieu</span>
-                        <input
-                          type="color"
-                          value={gradientMiddle}
-                          onChange={(e) => setGradientMiddle(e.target.value)}
-                        />
-                      </div>
-                      <div className="color-picker-row">
-                        <span>Couleur bas</span>
-                        <input
-                          type="color"
-                          value={gradientBottom}
-                          onChange={(e) => setGradientBottom(e.target.value)}
-                        />
-                      </div>
-                      <div className="color-picker-row" style={{ marginTop: 12 }}>
-                        <span>Degré dégradé haut</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          step={1}
-                          value={gradientStrength}
-                          onChange={(e) =>
-                            setGradientStrength(Number(e.target.value))
-                          }
-                          style={{ flex: 1 }}
-                        />
-                        <span style={{ width: 40, textAlign: "right" }}>
-                          {gradientStrength}
-                        </span>
-                      </div>
-                      <div className="color-picker-row" style={{ marginTop: 8 }}>
-                        <span>Degré dégradé bas</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          step={1}
-                          value={gradientStrength2}
-                          onChange={(e) =>
-                            setGradientStrength2(Number(e.target.value))
-                          }
-                          style={{ flex: 1 }}
-                        />
-                        <span style={{ width: 40, textAlign: "right" }}>
-                          {gradientStrength2}
-                        </span>
-                      </div>
-                      <div className="color-picker-row" style={{ marginTop: 8 }}>
-                        <span>Positions B / H</span>
-                        <div style={{ flex: 1 }}>
-                          <DualPositionSlider
-                            valueLow={gradientPosition2}
-                            valueHigh={gradientPosition}
-                            onChange={(low, high) => {
-                              setGradientPosition2(low);
-                              setGradientPosition(high);
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="color-picker-row" style={{ marginTop: 8 }}>
-                        <span>Angle dégradé</span>
-                        <div className="home-type-filters" style={{ flex: 1 }}>
-                          {[0, 45, 90].map((ang) => (
-                            <button
-                              key={ang}
-                              type="button"
-                              className={`home-type-filter-btn${
-                                gradientAngle === ang
-                                  ? " home-type-filter-btn--active"
-                                  : ""
-                              }`}
-                              onClick={() => setGradientAngle(ang)}
-                            >
-                              {ang}°
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {(modelType === "Lure17" ||
-                        modelType === "Lure18" ||
-                        modelType === "Lure19" ||
-                        modelType === "Lure20" ||
-                        modelType === "Lure21" ||
-                        modelType === "Lure22") && (
-                        <div className="color-picker-row" style={{ marginTop: 8 }}>
-                          <span>Mask</span>
-                          <div className="home-type-filters" style={{ flex: 1 }}>
-                            {[
-                              { key: "none", label: "Aucun" },
-                              { key: "pike", label: "Pike" },
-                              { key: "card", label: "Points" },
-                            ].map((opt) => (
-                              <button
-                                key={opt.key}
-                                type="button"
-                                className={`home-type-filter-btn${
-                                  maskType === opt.key
-                                    ? " home-type-filter-btn--active"
-                                    : ""
-                                }`}
-                                onClick={() => setMaskType(opt.key)}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="color-picker-row">
-                      <span>Couleur</span>
-                      <input
-                        type="color"
-                        value={color}
-                        onChange={(e) => setColor(e.target.value)}
-                      />
                     </div>
                   )}
                 </>

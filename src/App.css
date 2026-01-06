@@ -44,6 +44,44 @@
   height: 100%;
 }
 
+/* Petite légende X / Z / Y en haut à droite, alignée au gizmo */
+.axis-legend {
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  z-index: 16;
+  pointer-events: none;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-size: 10px;
+}
+
+.axis-legend-item {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--text-strong);
+}
+
+.axis-legend-item--x {
+  background: #ef4444;
+}
+
+.axis-legend-item--z {
+  background: #3b82f6;
+}
+
+.axis-legend-item--y {
+  background: #22c55e;
+}
+
 /* Panneau des dimensions du leurre */
 .lure-dimensions-panel {
   position: absolute;

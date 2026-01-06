@@ -331,6 +331,8 @@ export function LureModel({
       }
     }
 
+    let localRefInch = null;
+
     if (!scene.userData.cmPerWorldUnit) {
       let refCube = null;
       let refLengthCm = 4.0; // valeur par défaut
@@ -342,6 +344,7 @@ export function LureModel({
         const localRef = scene.getObjectByName("Ref_Inch");
         if (localRef) {
           refCube = localRef;
+          localRefInch = localRef;
           refLengthCm = 2.54; // 1 inch en centimètres
         }
       }
@@ -405,7 +408,22 @@ export function LureModel({
 
     // 3) Normalisation du modèle (position/échelle) pour l'affichage
     if (!scene.userData.normalized) {
-      const box = new THREE.Box3().setFromObject(scene);
+      // On calcule la bounding box en ignorant le cube de référence Ref_Inch,
+      // qui sert uniquement à la calibration d'échelle.
+      const box = new THREE.Box3();
+      let hasBox = false;
+      scene.traverse((child) => {
+        if (!child.isMesh) return;
+        if (child.name === "Ref_Inch") return;
+        const childBox = new THREE.Box3().setFromObject(child);
+        if (!hasBox) {
+          box.copy(childBox);
+          hasBox = true;
+        } else {
+          box.union(childBox);
+        }
+      });
+      if (!hasBox) return;
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
@@ -486,6 +504,13 @@ export function LureModel({
         if (!obj) return;
         obj.visible = name.startsWith(keepPrefix);
       });
+    }
+
+    // Enfin, masquer le cube de référence Ref_Inch s'il existe, pour qu'il ne
+    // soit jamais visible dans l'app (il sert uniquement à la calibration).
+    const refInchObj = scene.getObjectByName("Ref_Inch");
+    if (refInchObj) {
+      refInchObj.visible = false;
     }
 
     // Pour certains modèles (LurePret5), on force un

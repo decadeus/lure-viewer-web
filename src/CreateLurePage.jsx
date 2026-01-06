@@ -953,29 +953,8 @@ function CreateLurePage() {
                 modelType={modelType}
                 modelUrl={selectedLocalModel?.url || null}
                 color={color}
-              // Le dégradé 3 couleurs est activé pour LurePret5, Shad / Shad2,
-              // les anciens modèles compatibles, et les cubes de test.
-              useGradient={
-                modelType === "LurePret5" ||
-                modelType === "Shad" ||
-                modelType === "Shad2" ||
-                modelType === "Lure11" ||
-                modelType === "Lure12" ||
-                modelType === "Lure13" ||
-                modelType === "Lure14" ||
-                modelType === "Lure15" ||
-                modelType === "Lure16" ||
-                modelType === "Lure17" ||
-                modelType === "Lure18" ||
-                modelType === "Lure19" ||
-                modelType === "Lure20" ||
-                modelType === "Lure21" ||
-                modelType === "Lure22" ||
-                modelType === "Lure29" ||
-                modelType === "TEestCubeglb" ||
-                modelType === "TEestCubeglb2" ||
-                modelType === "TEestCubeglb14"
-              }
+                // On active systématiquement le dégradé 3 couleurs pour tous les modèles.
+                useGradient
               gradientTop={gradientTop}
               gradientMiddle={gradientMiddle}
               gradientBottom={gradientBottom}
@@ -1082,8 +1061,7 @@ function CreateLurePage() {
                 }
               />
             )}
-            {/* Gizmo façon Blender : axes X/Y/Z cliquables pour recadrer la vue.
-                On le décale encore plus vers la gauche pour libérer le coin pour la fenêtre Bavette. */}
+            {/* Gizmo d'orientation standard de drei (clicable) */}
             {!previewMode && (
               <GizmoHelper alignment="top-right" margin={[280, 80]}>
                 <GizmoViewport
@@ -1098,6 +1076,16 @@ function CreateLurePage() {
               target={[0, 0, 0]}
             />
           </Canvas>
+
+          {/* Petite légende d'axes façon Blender (Z en haut, Y en profondeur),
+              purement visuelle, superposée au gizmo standard. */}
+          {!previewMode && (
+            <div className="axis-legend">
+              <span className="axis-legend-item axis-legend-item--x">X</span>
+              <span className="axis-legend-item axis-legend-item--z">Z</span>
+              <span className="axis-legend-item axis-legend-item--y">Y</span>
+            </div>
+          )}
 
           {/* Bouton "œil" en haut à gauche pour basculer en mode aperçu
               (masque les axes, gizmo, fenêtre Bavette, etc.) */}
@@ -1722,6 +1710,30 @@ function CreateLurePage() {
                       <div className="asset-dock-meta-row">
                         <span>Modèle</span>
                         <span>{modelMetadata?.modele || "—"}</span>
+                      </div>
+                      <div className="asset-dock-meta-row">
+                        <span>Longueur</span>
+                        <span>
+                          {currentDimensionsCm?.lengthCm != null
+                            ? `${cmToInch(currentDimensionsCm.lengthCm).toFixed(2)}"`
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="asset-dock-meta-row">
+                        <span>Hauteur</span>
+                        <span>
+                          {currentDimensionsCm?.heightCm != null
+                            ? `${cmToInch(currentDimensionsCm.heightCm).toFixed(2)}"`
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="asset-dock-meta-row">
+                        <span>Largeur</span>
+                        <span>
+                          {currentDimensionsCm?.widthCm != null
+                            ? `${cmToInch(currentDimensionsCm.widthCm).toFixed(2)}"`
+                            : "—"}
+                        </span>
                       </div>
                       <div className="asset-dock-meta-row asset-dock-meta-row--description">
                         <span>Description</span>
